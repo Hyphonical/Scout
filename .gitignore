@@ -1,0 +1,5 @@
+/target
+/demo
+README.md
+/models/tagger/*
+/models/clip/*
