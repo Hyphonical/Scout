@@ -2,70 +2,58 @@
 
 use std::path::PathBuf;
 
-// Tagger model paths (relative to models/)
-pub const TAGGER_DIR: &str = "tagger";
-pub const TAGGER_MODEL: &str = "camie-tagger-v2.onnx";
-pub const TAGGER_MAPPINGS: &str = "camie-tagger-v2-mappings.json";
+// SigLIP2 model paths (all in models/)
+pub const VISION_MODEL: &str = "vision_model_q4f16.onnx";
+pub const TEXT_MODEL: &str = "text_model_q4f16.onnx";
+pub const TOKENIZER: &str = "tokenizer.json";
 
-// Embedder model paths (relative to models/)
-pub const EMBED_DIR: &str = "clip";
-pub const EMBED_MODEL: &str = "MiniLM-L6-v2.onnx";
-pub const EMBED_TOKENIZER: &str = "tokenizer.json";
-pub const EMBEDDING_DIM: usize = 384;
-
-// Processing
+// SigLIP2 parameters
 pub const INPUT_SIZE: u32 = 512;
-pub const MAX_TAGS: usize = 100;
-pub const DEFAULT_THRESHOLD: f32 = 0.70;
-pub const GPU_BATCH_THRESHOLD: usize = 3;
+pub const EMBEDDING_DIM: usize = 1024;
 
-// Sidecar storage - hash-based layout: .scout/ab/abcdef123.json
+// Sidecar storage: .scout/ab/abcdef123.json
 pub const SIDECAR_DIR: &str = ".scout";
 pub const HASH_BUFFER_SIZE: usize = 65536;
 
 // Supported image formats
 pub const IMAGE_EXTENSIONS: &[&str] = &[
-	"jpg", "jpeg", "png", "gif", "bmp", "webp", "tiff", "tif", "ico", "avif"
+	"jpg", "jpeg", "png", "gif", "bmp", "webp", "tiff", "tif", "ico", "avif",
 ];
 
 /// Finds the models directory by walking up from executable, then checking cwd.
 pub fn find_models_dir() -> Option<PathBuf> {
-	let exe_path = std::env::current_exe().ok()?;
-	let mut current = exe_path.parent()?;
-
-	for _ in 0..5 {
-		let models = current.join("models");
-		if models.is_dir() {
-			return Some(models);
+	if let Ok(exe) = std::env::current_exe() {
+		let mut dir = exe.parent();
+		for _ in 0..5 {
+			if let Some(d) = dir {
+				let models = d.join("models");
+				if models.is_dir() {
+					return Some(models);
+				}
+				dir = d.parent();
+			} else {
+				break;
+			}
 		}
-		current = current.parent()?;
 	}
-
-	let cwd_models = std::env::current_dir().ok()?.join("models");
-	cwd_models.is_dir().then_some(cwd_models)
+	let cwd = std::env::current_dir().ok()?.join("models");
+	cwd.is_dir().then_some(cwd)
 }
 
-pub fn get_tagger_model_path() -> Option<PathBuf> {
+pub fn get_vision_model_path() -> Option<PathBuf> {
 	let models = find_models_dir()?;
-	let path = models.join(TAGGER_DIR).join(TAGGER_MODEL);
-	
-	// Fallback to old flat structure for backwards compatibility
-	if path.exists() {
-		Some(path)
-	} else {
-		let legacy = models.join("camie-tagger-v2.onnx");
-		legacy.exists().then_some(legacy)
-	}
+	let path = models.join(VISION_MODEL);
+	path.exists().then_some(path)
 }
 
-pub fn get_tagger_mappings_path() -> Option<PathBuf> {
+pub fn get_text_model_path() -> Option<PathBuf> {
 	let models = find_models_dir()?;
-	let path = models.join(TAGGER_DIR).join(TAGGER_MAPPINGS);
-	
-	if path.exists() {
-		Some(path)
-	} else {
-		let legacy = models.join("camie-tagger-v2-mappings.json");
-		legacy.exists().then_some(legacy)
-	}
+	let path = models.join(TEXT_MODEL);
+	path.exists().then_some(path)
+}
+
+pub fn get_tokenizer_path() -> Option<PathBuf> {
+	let models = find_models_dir()?;
+	let path = models.join(TOKENIZER);
+	path.exists().then_some(path)
 }

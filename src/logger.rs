@@ -16,11 +16,11 @@ pub enum Level {
 pub fn log(level: Level, message: &str) {
 	let time = Local::now().format("%H:%M:%S").to_string().dimmed();
 	let icon = match level {
-		Level::Info => "ℹ".blue().bold(),
-		Level::Success => "✔".green().bold(),
+		Level::Info =>    "ℹ".blue().bold(),
+		Level::Success => "✔".bright_green().bold(),
 		Level::Warning => "⚠".yellow().bold(),
-		Level::Error => "✘".red().bold(),
-		Level::Debug => "⚙".cyan().bold(),
+		Level::Error =>   "✘".red().bold(),
+		Level::Debug =>   "⚙".bright_blue().bold(),
 	};
 	println!("[{}] {} {}", time, icon, message);
 }
@@ -28,7 +28,7 @@ pub fn log(level: Level, message: &str) {
 /// Prints a section header with visual separation.
 pub fn header(title: &str) {
 	println!();
-	println!("{}", format!("─── {} ───", title).cyan().bold());
+	println!("{}", format!("─── {} ───", title).bright_blue().bold());
 }
 
 /// Prints a processing summary with statistics.
@@ -37,7 +37,7 @@ pub fn summary(processed: usize, skipped: usize, errors: usize, duration_secs: f
 	header("Summary");
 
 	if processed > 0 {
-		println!("  {} {}", "Processed:".green(), processed);
+		println!("  {} {}", "Processed:".bright_blue(), processed);
 	}
 	if skipped > 0 {
 		println!("  {} {}", "Skipped:".yellow(), skipped);
@@ -46,10 +46,10 @@ pub fn summary(processed: usize, skipped: usize, errors: usize, duration_secs: f
 		println!("  {} {}", "Errors:".red(), errors);
 	}
 
-	println!("  {} {:.2}s", "Duration:".cyan(), duration_secs);
+	println!("  {} {:.2}s", "Duration:".bright_blue(), duration_secs);
 	if processed > 0 {
 		let avg_ms = (duration_secs * 1000.0) / processed as f32;
-		println!("  {} {:.0}ms/image", "Average:".cyan(), avg_ms);
+		println!("  {} {:.0}ms/image", "Average:".bright_blue(), avg_ms);
 	}
 	println!();
 }

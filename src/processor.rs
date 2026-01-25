@@ -1,167 +1,125 @@
-// Processor - ONNX model inference for image tagging
-//
-// Loads the tagging model once and reuses it for batch processing.
-// Automatically selects CUDA or CPU based on availability and batch size.
+// Processor - SigLIP2 vision encoder for image embeddings
 
 use anyhow::{Context, Result};
 use image::{imageops::FilterType, ImageReader};
 use ndarray::{Array, IxDyn};
-use ort::{
-	execution_providers::{CUDAExecutionProvider, ExecutionProvider},
-	session::{builder::GraphOptimizationLevel, Session},
-	value::Value,
-};
-use std::collections::HashMap;
+use ort::session::{builder::GraphOptimizationLevel, Session};
+use ort::{ep};
+use ort::value::Value;
 use std::path::Path;
 use std::sync::Mutex;
 use std::time::Instant;
 
-use crate::config::{self, INPUT_SIZE};
-use crate::sidecar::{compute_file_hash, ImageSidecar, TagEntry, TagStats};
+use crate::config::{get_vision_model_path, INPUT_SIZE, EMBEDDING_DIM};
+use crate::sidecar::compute_file_hash;
 
-pub struct ImageProcessor {
+pub struct VisionEncoder {
 	session: Mutex<Session>,
-	tag_mappings: HashMap<String, String>,
-	execution_provider: String,
 }
 
 pub struct ProcessingResult {
-	pub tags: Vec<TagEntry>,
-	pub stats: TagStats,
+	pub embedding: Vec<f32>,
 	pub image_hash: String,
+	pub processing_ms: u64,
 }
 
-impl ImageProcessor {
-	/// Initializes the ONNX model session. When `use_gpu` is true and CUDA is available,
-	/// runs inference on the GPU; otherwise falls back to CPU.
-	pub fn new(use_gpu: bool) -> Result<Self> {
-		let model_path = config::get_tagger_model_path()
-			.ok_or_else(|| anyhow::anyhow!("Tagger model not found. Expected models/tagger/model.onnx"))?;
-		let mappings_path = config::get_tagger_mappings_path()
-			.ok_or_else(|| anyhow::anyhow!("Tagger mappings not found. Expected models/tagger/mappings.json"))?;
+impl VisionEncoder {
+	pub fn new() -> Result<Self> {
+		let model_path = get_vision_model_path()
+			.ok_or_else(|| anyhow::anyhow!("Vision model not found"))?;
 
-		let mappings_str = std::fs::read_to_string(&mappings_path)
-			.with_context(|| format!("Failed to read {:?}", mappings_path))?;
-		let tag_mappings: HashMap<String, String> = serde_json::from_str(&mappings_str)
-			.context("Invalid mappings JSON")?;
-
-		let mut builder = Session::builder()
-			.context("Session builder failed")?
+		let session = Session::builder()
+			.context("Session builder")?
+			.with_execution_providers([
+				ep::CUDA::default().build().error_on_failure()
+			])?
 			.with_optimization_level(GraphOptimizationLevel::Level3)
-			.context("Optimization config failed")?
+			.context("Optimization")?
 			.with_intra_threads(4)
-			.context("Thread config failed")?;
+			.context("Threads")?
+			.commit_from_file(&model_path)
+			.context("Load vision model")?;
 
-		// Only attempt CUDA if requested and available
-		let execution_provider = if use_gpu && CUDAExecutionProvider::default().is_available().unwrap_or(false) {
-			let cuda = CUDAExecutionProvider::default()
-				.with_device_id(0)
-				.with_memory_limit(0)
-				.build();
-
-			builder = builder.with_execution_providers([cuda])
-				.context("CUDA config failed")?;
-			"CUDA".to_string()
-		} else {
-			"CPU".to_string()
-		};
-
-		let session = builder.commit_from_file(&model_path)
-			.with_context(|| format!("Failed to load model {:?}", model_path))?;
-
-		Ok(Self {
-			session: Mutex::new(session),
-			tag_mappings,
-			execution_provider,
-		})
+		Ok(Self { session: Mutex::new(session) })
 	}
 
-	pub fn execution_provider(&self) -> &str {
-		&self.execution_provider
-	}
-
-	pub fn vocabulary_size(&self) -> usize {
-		self.tag_mappings.len()
-	}
-
-	/// Processes an image file: computes hash, runs inference, filters tags above threshold.
-	pub fn process_image(&self, path: &Path, threshold: f32) -> Result<ProcessingResult> {
+	pub fn process_image(&self, path: &Path) -> Result<ProcessingResult> {
 		let start = Instant::now();
 		let image_hash = compute_file_hash(path)?;
 		let input = preprocess_image(path)?;
-		let probs = self.run_inference(input)?;
-		let tags = self.filter_tags(&probs, threshold);
+		let embedding = self.encode(input)?;
 
 		Ok(ProcessingResult {
-			stats: TagStats {
-				total_tags: tags.len(),
-				processing_ms: start.elapsed().as_millis() as u64,
-			},
-			tags,
+			embedding,
 			image_hash,
+			processing_ms: start.elapsed().as_millis() as u64,
 		})
 	}
 
-	/// Creates a sidecar structure from the processing result.
-	pub fn create_sidecar(&self, path: &Path, result: ProcessingResult, threshold: f32) -> ImageSidecar {
-		let mut sidecar = ImageSidecar::new(path, result.image_hash, result.tags, threshold, result.stats.processing_ms);
-		sidecar.stats = result.stats;
-		sidecar
-	}
+	fn encode(&self, input: Array<f32, IxDyn>) -> Result<Vec<f32>> {
+		let input_value = Value::from_array(input).context("Tensor creation")?;
+		let mut session = self.session.lock().map_err(|e| anyhow::anyhow!("Lock: {}", e))?;
 
-	fn run_inference(&self, input: Array<f32, IxDyn>) -> Result<Vec<f32>> {
-		let input_value = Value::from_array(input).context("Input tensor creation failed")?;
-		let mut session = self.session.lock().map_err(|e| anyhow::anyhow!("Session lock: {}", e))?;
+		let outputs = session.run(ort::inputs!["pixel_values" => input_value])
+			.context("Vision inference")?;
 
-		let outputs = session.run(ort::inputs!["input" => input_value]).context("Inference failed")?;
+		// Use pooler_output (second output) for aligned embeddings
+		let output = outputs.iter().nth(1)
+			.or_else(|| outputs.iter().next())
+			.context("No output")?
+			.1;
 
-		// Use refined logits (second output) and apply sigmoid
-		let logits = outputs[1].try_extract_tensor::<f32>().context("Logit extraction failed")?;
-		Ok(logits.1.iter().map(|&x| 1.0 / (1.0 + (-x).exp())).collect())
-	}
-
-	fn filter_tags(&self, probs: &[f32], threshold: f32) -> Vec<TagEntry> {
-		let mut tags: Vec<TagEntry> = probs.iter()
-			.enumerate()
-			.filter(|(_, &p)| p >= threshold)
-			.map(|(i, &p)| TagEntry {
-				id: i,
-				name: self.tag_mappings.get(&i.to_string())
-					.cloned()
-					.unwrap_or_else(|| format!("tag_{}", i)),
-				confidence: p,
-			})
-			.collect();
-
-		tags.sort_by(|a, b| b.confidence.partial_cmp(&a.confidence).unwrap());
-		tags
+		let (shape, data) = output.try_extract_tensor::<f32>()?;
+		let embedding = extract_embedding(data, &shape);
+		Ok(normalize(&embedding))
 	}
 }
 
-/// Loads, resizes, and normalizes an image to NCHW tensor format.
-/// Uses content-based format detection to handle mislabeled files
+fn extract_embedding(data: &[f32], shape: &[i64]) -> Vec<f32> {
+	let dims: Vec<usize> = shape.iter().map(|&x| x as usize).collect();
+	match dims.as_slice() {
+		[1, dim] if *dim == EMBEDDING_DIM => data.to_vec(),
+		[1, num_patches, dim] if *dim == EMBEDDING_DIM => {
+			// Apply mean pooling across patches if needed
+			let mut pooled = vec![0.0; *dim];
+			for patch_idx in 0..*num_patches {
+				let start = patch_idx * dim;
+				for (i, val) in pooled.iter_mut().enumerate() {
+					*val += data[start + i];
+				}
+			}
+			pooled.iter_mut().for_each(|v| *v /= *num_patches as f32);
+			pooled
+		},
+		_ => data.iter().take(EMBEDDING_DIM).copied().collect(),
+	}
+}
+
+fn normalize(v: &[f32]) -> Vec<f32> {
+	let norm: f32 = v.iter().map(|x| x * x).sum::<f32>().sqrt();
+	if norm > 0.0 { v.iter().map(|x| x / norm).collect() } else { v.to_vec() }
+}
+
 fn preprocess_image(path: &Path) -> Result<Array<f32, IxDyn>> {
 	let img = ImageReader::open(path)
-		.context("Open failed")?
+		.context("Open")?
 		.with_guessed_format()
-		.context("Format detection failed")?
+		.context("Format")?
 		.decode()
-		.context("Decode failed")?;
+		.context("Decode")?;
 
-	let resized = img.resize_exact(INPUT_SIZE, INPUT_SIZE, FilterType::Lanczos3);
+	let resized = img.resize_exact(INPUT_SIZE, INPUT_SIZE, FilterType::CatmullRom);
 	let rgb = resized.to_rgb8();
+	let size = INPUT_SIZE as usize;
 
-	let (w, h) = (INPUT_SIZE as usize, INPUT_SIZE as usize);
-	let mut arr = Array::zeros(IxDyn(&[1, 3, h, w]));
-
-	for y in 0..h {
-		for x in 0..w {
+	let mut arr = Array::zeros(IxDyn(&[1, 3, size, size]));
+	for y in 0..size {
+		for x in 0..size {
 			let px = rgb.get_pixel(x as u32, y as u32);
 			arr[[0, 0, y, x]] = px[0] as f32 / 255.0;
 			arr[[0, 1, y, x]] = px[1] as f32 / 255.0;
 			arr[[0, 2, y, x]] = px[2] as f32 / 255.0;
 		}
 	}
-
 	Ok(arr)
 }
