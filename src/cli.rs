@@ -47,6 +47,18 @@ pub struct Cli {
 	#[arg(short = 'v', long = "verbose", global = true)]
 	pub verbose: bool,
 
+	/// Force CPU execution (no GPU acceleration)
+	#[arg(long = "cpu", global = true, conflicts_with_all = ["cuda", "coreml"])]
+	pub cpu: bool,
+
+	/// Force CUDA execution (NVIDIA GPU)
+	#[arg(long = "cuda", global = true, conflicts_with_all = ["cpu", "coreml"])]
+	pub cuda: bool,
+
+	/// Force CoreML execution (Apple Silicon)
+	#[arg(long = "coreml", global = true, conflicts_with_all = ["cpu", "cuda"])]
+	pub coreml: bool,
+
 	#[command(subcommand)]
 	pub command: Command,
 }

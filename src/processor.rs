@@ -3,19 +3,18 @@
 use anyhow::{Context, Result};
 use image::{imageops::FilterType, ImageReader};
 use ndarray::{Array, IxDyn};
-use ort::session::{builder::GraphOptimizationLevel, Session};
-use ort::{ep};
 use ort::value::Value;
 use std::path::Path;
 use std::sync::Mutex;
 use std::time::Instant;
 
 use crate::config::{get_vision_model_path, INPUT_SIZE, EMBEDDING_DIM};
+use crate::runtime::create_session;
 use crate::sidecar::compute_file_hash;
 use crate::logger::{log, Level};
 
 pub struct VisionEncoder {
-	session: Mutex<Session>,
+	session: Mutex<ort::session::Session>,
 }
 
 pub struct ProcessingResult {
@@ -29,18 +28,7 @@ impl VisionEncoder {
 		let model_path = get_vision_model_path()
 			.ok_or_else(|| anyhow::anyhow!("Vision model not found"))?;
 
-		let session = Session::builder()
-			.context("Session builder")?
-			.with_execution_providers([
-				ep::CUDA::default().build().error_on_failure()
-			])?
-			.with_optimization_level(GraphOptimizationLevel::Level3)
-			.context("Optimization")?
-			.with_intra_threads(4)
-			.context("Threads")?
-			.commit_from_file(&model_path)
-			.context("Load vision model")?;
-
+		let session = create_session(&model_path)?;
 		Ok(Self { session: Mutex::new(session) })
 	}
 

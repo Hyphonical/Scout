@@ -2,17 +2,16 @@
 
 use anyhow::{Context, Result};
 use ndarray::Array2;
-use ort::session::{builder::GraphOptimizationLevel, Session};
-use ort::{ep};
 use ort::value::Value;
 use std::sync::Mutex;
 use tokenizers::Tokenizer;
 
 use crate::config::{get_text_model_path, get_tokenizer_path, EMBEDDING_DIM};
+use crate::runtime::create_session;
 use crate::logger::{log, Level};
 
 pub struct TextEncoder {
-	session: Mutex<Session>,
+	session: Mutex<ort::session::Session>,
 	tokenizer: Tokenizer,
 }
 
@@ -21,14 +20,7 @@ impl TextEncoder {
 		let model_path = get_text_model_path().context("Text model not found")?;
 		let tokenizer_path = get_tokenizer_path().context("Tokenizer not found")?;
 
-		let session = Session::builder()?
-			.with_execution_providers([
-				ep::CUDA::default().build().error_on_failure()
-			])?
-			.with_optimization_level(GraphOptimizationLevel::Level3)?
-			.with_intra_threads(4)?
-			.commit_from_file(&model_path)
-			.context("Load text model")?;
+		let session = create_session(&model_path)?;
 
 		let tokenizer = Tokenizer::from_file(&tokenizer_path)
 			.map_err(|e| anyhow::anyhow!("Load tokenizer: {}", e))?;

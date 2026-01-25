@@ -5,6 +5,7 @@ mod config;
 mod embedder;
 mod logger;
 mod processor;
+mod runtime;
 mod scanner;
 mod search;
 mod sidecar;
@@ -20,6 +21,7 @@ use cli::{Cli, Command};
 use config::SIDECAR_DIR;
 use logger::{log, summary, Level};
 use processor::VisionEncoder;
+use runtime::{set_ep_preference, ExecutionProviderPreference};
 use scanner::{scan_directory, ImageEntry};
 use search::search_images;
 use sidecar::ImageSidecar;
@@ -29,6 +31,7 @@ fn main() -> Result<()> {
 	let cli = Cli::parse();
 
 	logger::set_verbose(cli.verbose);
+	set_ep_preference(ExecutionProviderPreference::from_flags(cli.cpu, cli.cuda, cli.coreml));
 
 	match cli.command {
 		Command::Scan { directory, recursive, force } => {
