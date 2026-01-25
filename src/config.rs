@@ -11,6 +11,9 @@ pub const TOKENIZER: &str = "tokenizer.json";
 pub const INPUT_SIZE: u32 = 512;
 pub const EMBEDDING_DIM: usize = 1024;
 
+// Interactive debounce time (ms)
+pub const DEBOUNCE_TIME_MS: u64 = 400;
+
 // Sidecar storage: .scout/ab/abcdef123.json
 pub const SIDECAR_DIR: &str = ".scout";
 pub const HASH_BUFFER_SIZE: usize = 65536;

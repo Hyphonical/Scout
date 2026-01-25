@@ -8,6 +8,7 @@ mod processor;
 mod scanner;
 mod search;
 mod sidecar;
+mod live;
 
 use anyhow::{Context, Result};
 use clap::{CommandFactory, Parser};
@@ -22,6 +23,7 @@ use processor::VisionEncoder;
 use scanner::{scan_directory, ImageEntry};
 use search::search_images;
 use sidecar::ImageSidecar;
+use live::run_live_search;
 
 fn main() -> Result<()> {
 	let cli = Cli::parse();
@@ -34,6 +36,9 @@ fn main() -> Result<()> {
 		}
 		Command::Search { query, directory, limit, min_score, open } => {
 			run_search(&query, &directory, limit, min_score, open)
+		}
+		Command::Live { directory } => {
+			run_live_search(&directory)
 		}
 		Command::Help { subcommand } => {
 			let mut cmd = Cli::command();
@@ -137,7 +142,7 @@ fn run_search(query: &str, directory: &Path, limit: usize, min_score: f32, open:
 		};
 
 		let rank = format!("#{}", i + 1).bright_blue().bold();
-		
+
 		println!("  {} {} {}", rank, score_colored, name.white());
 		println!("      {}", result.path.to_string_lossy().dimmed());
 	}

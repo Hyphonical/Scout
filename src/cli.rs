@@ -23,8 +23,9 @@ fn styles() -> Styles {
 	after_help = format!(
 		"{title}
   {scout} {scan}    {scan_args}   {scan_desc}
-  {scout} {search}  {search_args}        {search_desc}
-  {scout} {help}    {help_args}              {help_desc}",
+  {scout} {search}  {search_args}      {search_desc}
+  {scout} {help}    {help_args}              {help_desc},
+  {scout} {live}    {live_args}      {live_desc}",
 		title = "Examples:".bright_blue().bold(),
 		scout = "scout".bright_blue(),
 		scan = "scan".yellow(),
@@ -34,8 +35,11 @@ fn styles() -> Styles {
 		search_args = "-d ./images/",
 		search_desc = "Search by description".dimmed(),
 		help = "help".yellow(),
-		help_args = "scan".yellow(),
+		help_args = "scan",
 		help_desc = "Show help for scan".dimmed(),
+		live = "live".yellow(),
+		live_args = "-d ./images/",
+		live_desc = "Live search in terminal".dimmed(),
 	),
 )]
 pub struct Cli {
@@ -85,6 +89,13 @@ pub enum Command {
 		/// Open best match in default viewer
 		#[arg(short = 'o', long = "open")]
 		open: bool,
+	},
+
+	/// Live interactive search in terminal
+	Live {
+		/// Directory to search
+		#[arg(short = 'd', long = "dir", default_value = ".")]
+		directory: PathBuf,
 	},
 
 	/// Show help for a subcommand
