@@ -3,7 +3,13 @@
 use chrono::Local;
 use colored::*;
 
-#[derive(Clone, Copy)]
+static mut VERBOSE: bool = false;
+
+pub fn set_verbose(v: bool) {
+	unsafe { VERBOSE = v; }
+}
+
+#[derive(Clone, Copy, PartialEq)]
 pub enum Level {
 	Info,
 	Success,
@@ -14,6 +20,14 @@ pub enum Level {
 
 /// Prints a timestamped, colored log message to stdout.
 pub fn log(level: Level, message: &str) {
+	if level == Level::Debug {
+		unsafe {
+			if !VERBOSE {
+				return;
+			}
+		}
+	}
+
 	let time = Local::now().format("%H:%M:%S").to_string().dimmed();
 	let icon = match level {
 		Level::Info =>    "ℹ".blue().bold(),

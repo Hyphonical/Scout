@@ -26,6 +26,8 @@ use sidecar::ImageSidecar;
 fn main() -> Result<()> {
 	let cli = Cli::parse();
 
+	logger::set_verbose(cli.verbose);
+
 	match cli.command {
 		Command::Scan { directory, recursive, force } => {
 			run_scan(&directory, recursive, force)
@@ -55,6 +57,7 @@ fn run_scan(directory: &Path, recursive: bool, force: bool) -> Result<()> {
 	println!("{}", format!("─── Scout v{} ───", env!("CARGO_PKG_VERSION")).bright_blue().bold());
 
 	log(Level::Info, "Scanning for images...");
+	log(Level::Debug, &format!("Directory: {}, Recursive: {}, Force: {}", directory.display(), recursive, force));
 	let scan = scan_directory(directory, recursive, force)?;
 
 	log(Level::Success, &format!(
@@ -72,12 +75,14 @@ fn run_scan(directory: &Path, recursive: bool, force: bool) -> Result<()> {
 	}
 
 	log(Level::Info, "Loading vision model...");
+	log(Level::Debug, "Initializing VisionEncoder session");
 	let load_start = Instant::now();
 	let encoder = VisionEncoder::new().context("Failed to load vision model")?;
 	log(Level::Success, &format!("Model ready in {:.2}s", load_start.elapsed().as_secs_f32()));
 
 	println!();
 	println!("{}", "─── Processing ───".bright_blue().bold());
+	log(Level::Debug, &format!("Processing {} images", scan.images.len()));
 
 	let process_start = Instant::now();
 	let (processed, errors) = process_images(&scan.images, &encoder);
@@ -105,6 +110,7 @@ fn run_search(query: &str, directory: &Path, limit: usize, min_score: f32, open:
 	}
 
 	log(Level::Info, &format!("Searching: {}", query.bright_blue()));
+	log(Level::Debug, &format!("Directory: {}, Limit: {}, Min score: {:.2}, Open: {}", directory.display(), limit, min_score, open));
 	let results = search_images(&root, query, min_score);
 
 	if results.is_empty() {
@@ -155,6 +161,7 @@ fn process_images(images: &[ImageEntry], encoder: &VisionEncoder) -> (usize, usi
 
 	for (i, entry) in images.iter().enumerate() {
 		let display = truncate(&entry.path.to_string_lossy(), 50);
+		log(Level::Debug, &format!("Processing image {}: {}", i + 1, display));
 		let image_start = Instant::now();
 
 		match encoder.process_image(&entry.path) {

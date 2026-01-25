@@ -9,6 +9,7 @@ use std::sync::Mutex;
 use tokenizers::Tokenizer;
 
 use crate::config::{get_text_model_path, get_tokenizer_path, EMBEDDING_DIM};
+use crate::logger::{log, Level};
 
 pub struct TextEncoder {
 	session: Mutex<Session>,
@@ -36,6 +37,7 @@ impl TextEncoder {
 	}
 
 	pub fn embed(&self, text: &str) -> Result<Vec<f32>> {
+		log(Level::Debug, &format!("Embedding text: {}", text));
 		let encoding = self.tokenizer.encode(text, true)
 			.map_err(|e| anyhow::anyhow!("Tokenize: {}", e))?;
 
@@ -50,6 +52,7 @@ impl TextEncoder {
 		let outputs = session.run(ort::inputs![
 			"input_ids" => input_ids_val,
 		]).context("Text inference")?;
+		log(Level::Debug, "Text inference completed");
 
 		// Use pooler_output (second output) for aligned embeddings
 		let output = outputs.iter().nth(1)

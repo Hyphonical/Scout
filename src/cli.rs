@@ -39,6 +39,10 @@ fn styles() -> Styles {
 	),
 )]
 pub struct Cli {
+	/// Enable verbose debug output
+	#[arg(short = 'v', long = "verbose", global = true)]
+	pub verbose: bool,
+
 	#[command(subcommand)]
 	pub command: Command,
 }

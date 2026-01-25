@@ -18,6 +18,7 @@ pub fn search_images(root: &Path, query: &str, min_score: f32) -> Vec<SearchResu
 	if !scout_dir.exists() {
 		return Vec::new();
 	}
+	log(Level::Debug, &format!("Searching in directory: {}, Query: {}, Min score: {:.2}", root.display(), query, min_score));
 
 	let encoder = match TextEncoder::new() {
 			Ok(e) => e,
@@ -38,6 +39,7 @@ pub fn search_images(root: &Path, query: &str, min_score: f32) -> Vec<SearchResu
 	let mut results = Vec::new();
 
 	for sidecar_path in iter_sidecars(root) {
+		log(Level::Debug, &format!("Checking sidecar: {}", sidecar_path.display()));
 		let Ok(content) = fs::read_to_string(&sidecar_path) else { continue };
 		let Ok(sidecar) = serde_json::from_str::<ImageSidecar>(&content) else { continue };
 

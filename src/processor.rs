@@ -12,6 +12,7 @@ use std::time::Instant;
 
 use crate::config::{get_vision_model_path, INPUT_SIZE, EMBEDDING_DIM};
 use crate::sidecar::compute_file_hash;
+use crate::logger::{log, Level};
 
 pub struct VisionEncoder {
 	session: Mutex<Session>,
@@ -45,6 +46,7 @@ impl VisionEncoder {
 
 	pub fn process_image(&self, path: &Path) -> Result<ProcessingResult> {
 		let start = Instant::now();
+		log(Level::Debug, &format!("Processing image: {}", path.display()));
 		let image_hash = compute_file_hash(path)?;
 		let input = preprocess_image(path)?;
 		let embedding = self.encode(input)?;
@@ -57,6 +59,7 @@ impl VisionEncoder {
 	}
 
 	fn encode(&self, input: Array<f32, IxDyn>) -> Result<Vec<f32>> {
+		log(Level::Debug, "Running vision inference");
 		let input_value = Value::from_array(input).context("Tensor creation")?;
 		let mut session = self.session.lock().map_err(|e| anyhow::anyhow!("Lock: {}", e))?;
 
@@ -101,6 +104,7 @@ fn normalize(v: &[f32]) -> Vec<f32> {
 }
 
 fn preprocess_image(path: &Path) -> Result<Array<f32, IxDyn>> {
+	log(Level::Debug, &format!("Preprocessing image: {}", path.display()));
 	let img = ImageReader::open(path)
 		.context("Open")?
 		.with_guessed_format()

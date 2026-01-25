@@ -7,6 +7,7 @@ use walkdir::WalkDir;
 
 use crate::config::{IMAGE_EXTENSIONS, SIDECAR_DIR};
 use crate::sidecar::{compute_file_hash, find_sidecar_by_hash, get_sidecar_path};
+use crate::logger::{log, Level};
 
 pub struct ScanResult {
 	pub images: Vec<ImageEntry>,
@@ -27,6 +28,7 @@ impl ScanResult {
 
 pub fn scan_directory(directory: &Path, recursive: bool, force: bool) -> Result<ScanResult> {
 	let root = directory.canonicalize().unwrap_or_else(|_| directory.to_path_buf());
+	log(Level::Debug, &format!("Scanning directory: {}, Recursive: {}, Force: {}", root.display(), recursive, force));
 	let mut result = ScanResult { images: Vec::new(), skipped: Vec::new(), errors: Vec::new() };
 	let mut seen = HashSet::new();
 
@@ -55,6 +57,7 @@ pub fn scan_directory(directory: &Path, recursive: bool, force: bool) -> Result<
 				continue;
 			}
 		};
+		log(Level::Debug, &format!("Computed hash for {}: {}", canonical.display(), &hash[..8]));
 
 		if !force && find_sidecar_by_hash(&hash, &root).is_some() {
 			result.skipped.push(canonical);
