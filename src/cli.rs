@@ -78,6 +78,26 @@ pub enum Command {
 		/// Re-process already indexed images
 		#[arg(short = 'f', long = "force")]
 		force: bool,
+
+		/// Minimum image width in pixels (default: 64)
+		#[arg(long = "min-width", default_value_t = 64)]
+		min_width: u32,
+
+		/// Minimum image height in pixels (default: 64)
+		#[arg(long = "min-height", default_value_t = 64)]
+		min_height: u32,
+
+		/// Minimum file size in KB (default: 0)
+		#[arg(long = "min-size", default_value_t = 0)]
+		min_size_kb: u64,
+
+		/// Maximum file size in MB (default: unlimited)
+		#[arg(long = "max-size")]
+		max_size_mb: Option<u64>,
+
+		/// Skip images matching these patterns (comma-separated, e.g., "thumb,icon,avatar")
+		#[arg(long = "exclude", value_delimiter = ',')]
+		exclude_patterns: Vec<String>,
 	},
 
 	/// Search images by text description
@@ -115,4 +135,32 @@ pub enum Command {
 		/// Subcommand name
 		subcommand: Option<String>,
 	},
+}
+
+/// Filtering criteria for image scanning
+#[derive(Debug, Clone)]
+pub struct ScanFilters {
+	pub min_width: u32,
+	pub min_height: u32,
+	pub min_size_kb: u64,
+	pub max_size_mb: Option<u64>,
+	pub exclude_patterns: Vec<String>,
+}
+
+impl ScanFilters {
+	pub fn from_scan_command(
+		min_width: u32,
+		min_height: u32,
+		min_size_kb: u64,
+		max_size_mb: Option<u64>,
+		exclude_patterns: Vec<String>,
+	) -> Self {
+		Self {
+			min_width,
+			min_height,
+			min_size_kb,
+			max_size_mb,
+			exclude_patterns,
+		}
+	}
 }

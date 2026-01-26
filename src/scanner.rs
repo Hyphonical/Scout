@@ -1,17 +1,20 @@
-// Scanner - Discovers image files in directories
+// Scanner - Discovers image files in directories with advanced filtering
 
 use anyhow::Result;
+use image::ImageReader;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
+use crate::cli::ScanFilters;
 use crate::config::{IMAGE_EXTENSIONS, SIDECAR_DIR};
-use crate::sidecar::{compute_file_hash, find_sidecar_by_hash, get_sidecar_path};
 use crate::logger::{log, Level};
+use crate::sidecar::{compute_file_hash, find_sidecar_by_hash, get_sidecar_path};
 
 pub struct ScanResult {
 	pub images: Vec<ImageEntry>,
 	pub skipped: Vec<PathBuf>,
+	pub filtered: Vec<FilterReason>,
 	pub errors: Vec<String>,
 }
 
@@ -20,16 +23,71 @@ pub struct ImageEntry {
 	pub sidecar_path: PathBuf,
 }
 
+#[derive(Debug)]
+pub struct FilterReason {
+	pub path: PathBuf,
+	pub reason: String,
+}
+
 impl ScanResult {
 	pub fn total(&self) -> usize {
 		self.images.len() + self.skipped.len()
 	}
+
+	pub fn total_found(&self) -> usize {
+		self.total() + self.filtered.len()
+	}
 }
 
-pub fn scan_directory(directory: &Path, recursive: bool, force: bool) -> Result<ScanResult> {
+pub fn scan_directory(
+	directory: &Path,
+	recursive: bool,
+	force: bool,
+	filters: &ScanFilters,
+) -> Result<ScanResult> {
 	let root = directory.canonicalize().unwrap_or_else(|_| directory.to_path_buf());
-	log(Level::Debug, &format!("Scanning directory: {}, Recursive: {}, Force: {}", root.display(), recursive, force));
-	let mut result = ScanResult { images: Vec::new(), skipped: Vec::new(), errors: Vec::new() };
+	log(
+		Level::Debug,
+		&format!(
+			"Scanning directory: {}, Recursive: {}, Force: {}",
+			root.display(),
+			recursive,
+			force
+		),
+	);
+
+	// Log active filters
+	if filters.min_width > 0 || filters.min_height > 0 {
+		log(
+			Level::Debug,
+			&format!(
+				"Minimum resolution: {}x{}",
+				filters.min_width, filters.min_height
+			),
+		);
+	}
+	if filters.min_size_kb > 0 {
+		log(
+			Level::Debug,
+			&format!("Minimum file size: {}KB", filters.min_size_kb),
+		);
+	}
+	if let Some(max) = filters.max_size_mb {
+		log(Level::Debug, &format!("Maximum file size: {}MB", max));
+	}
+	if !filters.exclude_patterns.is_empty() {
+		log(
+			Level::Debug,
+			&format!("Exclude patterns: {}", filters.exclude_patterns.join(", ")),
+		);
+	}
+
+	let mut result = ScanResult {
+		images: Vec::new(),
+		skipped: Vec::new(),
+		filtered: Vec::new(),
+		errors: Vec::new(),
+	};
 	let mut seen = HashSet::new();
 
 	let walker = if recursive {
@@ -50,14 +108,28 @@ pub fn scan_directory(directory: &Path, recursive: bool, force: bool) -> Result<
 		}
 		seen.insert(canonical.clone());
 
+		// Apply filters
+		if let Some(reason) = should_filter(&canonical, filters) {
+			result.filtered.push(FilterReason {
+				path: canonical,
+				reason,
+			});
+			continue;
+		}
+
 		let hash = match compute_file_hash(&canonical) {
 			Ok(h) => h,
 			Err(e) => {
-				result.errors.push(format!("{}: {}", canonical.display(), e));
+				result
+					.errors
+					.push(format!("{}: {}", canonical.display(), e));
 				continue;
 			}
 		};
-		log(Level::Debug, &format!("Computed hash for {}: {}", canonical.display(), &hash[..8]));
+		log(
+			Level::Debug,
+			&format!("Computed hash for {}: {}", canonical.display(), &hash[..8]),
+		);
 
 		if !force && find_sidecar_by_hash(&hash, &root).is_some() {
 			result.skipped.push(canonical);
@@ -71,6 +143,63 @@ pub fn scan_directory(directory: &Path, recursive: bool, force: bool) -> Result<
 	}
 
 	Ok(result)
+}
+
+/// Checks if an image should be filtered out. Returns Some(reason) if it should be filtered.
+fn should_filter(path: &Path, filters: &ScanFilters) -> Option<String> {
+	// Check exclude patterns
+	if !filters.exclude_patterns.is_empty() {
+		let path_str = path.to_string_lossy().to_lowercase();
+		for pattern in &filters.exclude_patterns {
+			if path_str.contains(&pattern.to_lowercase()) {
+				return Some(format!("matches exclude pattern '{}'", pattern));
+			}
+		}
+	}
+
+	// Check file size
+	if let Ok(metadata) = std::fs::metadata(path) {
+		let size_bytes = metadata.len();
+		let size_kb = size_bytes / 1024;
+		let size_mb = size_kb / 1024;
+
+		if size_kb < filters.min_size_kb {
+			return Some(format!("file too small ({}KB < {}KB)", size_kb, filters.min_size_kb));
+		}
+
+		if let Some(max_mb) = filters.max_size_mb {
+			if size_mb > max_mb {
+				return Some(format!("file too large ({}MB > {}MB)", size_mb, max_mb));
+			}
+		}
+	}
+
+	// Check image dimensions (only if resolution filters are set)
+	if filters.min_width > 0 || filters.min_height > 0 {
+		match ImageReader::open(path) {
+			Ok(reader) => {
+				if let Ok(dimensions) = reader.into_dimensions() {
+					let (width, height) = dimensions;
+					
+					if width < filters.min_width || height < filters.min_height {
+						return Some(format!(
+							"resolution too small ({}x{} < {}x{})",
+							width, height, filters.min_width, filters.min_height
+						));
+					}
+				} else {
+					// Can't read dimensions, but don't filter - let processor handle it
+					log(Level::Debug, &format!("Could not read dimensions for {}", path.display()));
+				}
+			}
+			Err(_) => {
+				// Can't open image for dimension check, but don't filter - let processor handle it
+				log(Level::Debug, &format!("Could not open for dimension check: {}", path.display()));
+			}
+		}
+	}
+
+	None
 }
 
 fn is_image(path: &Path) -> bool {

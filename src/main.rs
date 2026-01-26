@@ -17,7 +17,7 @@ use colored::Colorize;
 use std::path::Path;
 use std::time::Instant;
 
-use cli::{Cli, Command};
+use cli::{Cli, Command, ScanFilters};
 use config::SIDECAR_DIR;
 use logger::{log, summary, Level};
 use processor::VisionEncoder;
@@ -34,8 +34,24 @@ fn main() -> Result<()> {
 	set_ep_preference(ExecutionProviderPreference::from_flags(cli.cpu, cli.cuda, cli.coreml));
 
 	match cli.command {
-		Command::Scan { directory, recursive, force } => {
-			run_scan(&directory, recursive, force)
+		Command::Scan {
+			directory,
+			recursive,
+			force,
+			min_width,
+			min_height,
+			min_size_kb,
+			max_size_mb,
+			exclude_patterns,
+		} => {
+			let filters = ScanFilters::from_scan_command(
+				min_width,
+				min_height,
+				min_size_kb,
+				max_size_mb,
+				exclude_patterns,
+			);
+			run_scan(&directory, recursive, force, &filters)
 		}
 		Command::Search { query, directory, limit, min_score, open } => {
 			run_search(&query, &directory, limit, min_score, open)
@@ -60,17 +76,44 @@ fn main() -> Result<()> {
 	}
 }
 
-fn run_scan(directory: &Path, recursive: bool, force: bool) -> Result<()> {
+fn run_scan(
+	directory: &Path,
+	recursive: bool,
+	force: bool,
+	filters: &ScanFilters,
+) -> Result<()> {
 	println!();
 	println!("{}", format!("─── Scout v{} ───", env!("CARGO_PKG_VERSION")).bright_blue().bold());
 
 	log(Level::Info, "Scanning for images...");
 	log(Level::Debug, &format!("Directory: {}, Recursive: {}, Force: {}", directory.display(), recursive, force));
-	let scan = scan_directory(directory, recursive, force)?;
+	let scan = scan_directory(directory, recursive, force, filters)?;
+
+	// Show filtering statistics if any images were filtered
+	if !scan.filtered.is_empty() {
+		log(
+			Level::Info,
+			&format!(
+				"Filtered out {} images (use --verbose to see reasons)",
+				scan.filtered.len()
+			),
+		);
+		
+		// In verbose mode, show why each image was filtered
+		for filtered in &scan.filtered {
+			log(
+				Level::Debug,
+				&format!("Filtered: {} - {}", filtered.path.display(), filtered.reason),
+			);
+		}
+	}
 
 	log(Level::Success, &format!(
-		"Found {} images ({} to process, {} already indexed)",
-		scan.total(), scan.images.len(), scan.skipped.len()
+		"Found {} images ({} to process, {} already indexed, {} filtered)",
+		scan.total(),
+		scan.images.len(),
+		scan.skipped.len(),
+		scan.filtered.len()
 	));
 
 	for err in &scan.errors {
