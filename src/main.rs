@@ -1,29 +1,29 @@
-// Scout - AI-powered semantic image search using SigLIP2
+// Scout - AI-powered semantic image search
 
 mod cli;
 mod config;
 mod embedder;
+mod embedding;
+mod live;
 mod logger;
 mod processor;
 mod runtime;
 mod scanner;
 mod search;
 mod sidecar;
-mod live;
 
 use anyhow::{Context, Result};
 use clap::{CommandFactory, Parser};
 use colored::Colorize;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use cli::{Cli, Command, ScanFilters};
-use config::SIDECAR_DIR;
 use logger::{log, summary, Level};
 use processor::VisionEncoder;
-use runtime::{set_ep_preference, ExecutionProviderPreference};
+use runtime::set_provider;
 use scanner::{scan_directory, ImageEntry};
-use search::search_images;
+use search::{search_with_query, SearchQuery};
 use sidecar::ImageSidecar;
 use live::run_live_search;
 
@@ -31,7 +31,7 @@ fn main() -> Result<()> {
 	let cli = Cli::parse();
 
 	logger::set_verbose(cli.verbose);
-	set_ep_preference(ExecutionProviderPreference::from_flags(cli.cpu, cli.cuda, cli.coreml));
+	set_provider(cli.provider);
 
 	match cli.command {
 		Command::Scan {
@@ -53,11 +53,11 @@ fn main() -> Result<()> {
 			);
 			run_scan(&directory, recursive, force, &filters)
 		}
-		Command::Search { query, directory, limit, min_score, open } => {
-			run_search(&query, &directory, limit, min_score, open)
+		Command::Search { query, image, weight, directory, recursive, limit, min_score, open, include_ref } => {
+			run_search(query.as_deref(), image.as_ref(), weight, &directory, recursive, limit, min_score, open, include_ref)
 		}
-		Command::Live { directory } => {
-			run_live_search(&directory)
+		Command::Live { directory, recursive } => {
+			run_live_search(&directory, recursive)
 		}
 		Command::Help { subcommand } => {
 			let mut cmd = Cli::command();
@@ -83,23 +83,21 @@ fn run_scan(
 	filters: &ScanFilters,
 ) -> Result<()> {
 	println!();
-	println!("{}", format!("─── Scout v{} ───", env!("CARGO_PKG_VERSION")).bright_blue().bold());
+	println!(
+		"{}",
+		format!("─── Scout v{} ───", env!("CARGO_PKG_VERSION"))
+			.bright_blue()
+			.bold()
+	);
 
 	log(Level::Info, "Scanning for images...");
-	log(Level::Debug, &format!("Directory: {}, Recursive: {}, Force: {}", directory.display(), recursive, force));
 	let scan = scan_directory(directory, recursive, force, filters)?;
 
-	// Show filtering statistics if any images were filtered
 	if !scan.filtered.is_empty() {
 		log(
 			Level::Info,
-			&format!(
-				"Filtered out {} images (use --verbose to see reasons)",
-				scan.filtered.len()
-			),
+			&format!("Filtered {} images (--verbose for details)", scan.filtered.len()),
 		);
-		
-		// In verbose mode, show why each image was filtered
 		for filtered in &scan.filtered {
 			log(
 				Level::Debug,
@@ -108,13 +106,23 @@ fn run_scan(
 		}
 	}
 
-	log(Level::Success, &format!(
-		"Found {} images ({} to process, {} already indexed, {} filtered)",
-		scan.total(),
-		scan.images.len(),
-		scan.skipped.len(),
-		scan.filtered.len()
-	));
+	log(
+		Level::Success,
+		&format!(
+			"Found {} images ({} to process, {} indexed, {} filtered)",
+			scan.total(),
+			scan.images.len(),
+			scan.skipped.len(),
+			scan.filtered.len()
+		),
+	);
+
+	if scan.outdated > 0 {
+		log(
+			Level::Info,
+			&format!("Upgrading {} outdated sidecars to v{}", scan.outdated, env!("CARGO_PKG_VERSION")),
+		);
+	}
 
 	for err in &scan.errors {
 		log(Level::Warning, err);
@@ -126,18 +134,21 @@ fn run_scan(
 	}
 
 	log(Level::Info, "Loading vision model...");
-	log(Level::Debug, "Initializing VisionEncoder session");
 	let load_start = Instant::now();
 	let encoder = VisionEncoder::new().context("Failed to load vision model")?;
-	log(Level::Success, &format!("Model ready in {:.2}s", load_start.elapsed().as_secs_f32()));
-
-	println!();
-	println!("{}", "─── Processing ───".bright_blue().bold());
-	log(Level::Debug, &format!("Processing {} images", scan.images.len()));
+	log(
+		Level::Success,
+		&format!("Model ready in {:.2}s", load_start.elapsed().as_secs_f32()),
+	);
 
 	let process_start = Instant::now();
 	let (processed, errors) = process_images(&scan.images, &encoder);
-	summary(processed, scan.skipped.len(), errors, process_start.elapsed().as_secs_f32());
+	summary(
+		processed,
+		scan.skipped.len(),
+		errors,
+		process_start.elapsed().as_secs_f32(),
+	);
 
 	if errors > 0 {
 		log(Level::Warning, &format!("Completed with {} errors", errors));
@@ -148,21 +159,56 @@ fn run_scan(
 	Ok(())
 }
 
-fn run_search(query: &str, directory: &Path, limit: usize, min_score: f32, open: bool) -> Result<()> {
-	println!();
-	println!("{}", format!("─── Scout v{} ───", env!("CARGO_PKG_VERSION")).bright_blue().bold());
-
-	let root = directory.canonicalize().unwrap_or_else(|_| directory.to_path_buf());
-	let scout_dir = root.join(SIDECAR_DIR);
-
-	if !scout_dir.exists() {
-		log(Level::Error, &format!("No {} directory. Run 'scout scan' first.", SIDECAR_DIR));
+fn run_search(
+	query: Option<&str>,
+	image: Option<&PathBuf>,
+	weight: f32,
+	directory: &Path,
+	recursive: bool,
+	limit: usize,
+	min_score: f32,
+	open: bool,
+	include_ref: bool,
+) -> Result<()> {
+	if query.is_none() && image.is_none() {
+		log(Level::Error, "Must provide a text query or --image (or both)");
 		std::process::exit(1);
 	}
 
-	log(Level::Info, &format!("Searching: {}", query.bright_blue()));
-	log(Level::Debug, &format!("Directory: {}, Limit: {}, Min score: {:.2}, Open: {}", directory.display(), limit, min_score, open));
-	let results = search_images(&root, query, min_score);
+	println!();
+	println!(
+		"{}",
+		format!("─── Scout v{} ───", env!("CARGO_PKG_VERSION"))
+			.bright_blue()
+			.bold()
+	);
+
+	let root = directory.canonicalize().unwrap_or_else(|_| directory.to_path_buf());
+
+	// Build search description
+	let search_desc = match (&query, &image) {
+		(Some(q), Some(img)) => {
+			let name = img.file_name().map(|n| n.to_string_lossy()).unwrap_or_else(|| img.to_string_lossy());
+			format!("\"{}\" + {} ({:.0}% text)", q.bright_blue(), name.yellow(), weight * 100.0)
+		}
+		(Some(q), None) => format!("{}", q.bright_blue()),
+		(None, Some(img)) => {
+			let name = img.file_name().map(|n| n.to_string_lossy()).unwrap_or_else(|| img.to_string_lossy());
+			format!("similar to {}", name.yellow())
+		}
+		(None, None) => unreachable!(),
+	};
+	log(Level::Info, &format!("Searching: {}", search_desc));
+
+	let search_query = match (&query, &image) {
+		(Some(q), Some(img)) => SearchQuery::combined(q, img, weight),
+		(Some(q), None) => SearchQuery::text_only(q),
+		(None, Some(img)) => SearchQuery::image_only(img),
+		(None, None) => unreachable!(),
+	};
+
+	let exclude_path = if include_ref { None } else { image.map(|p| p.as_path()) };
+	let results = search_with_query(&root, search_query, min_score, exclude_path, recursive);
 
 	if results.is_empty() {
 		log(Level::Warning, "No matches found");
@@ -173,23 +219,27 @@ fn run_search(query: &str, directory: &Path, limit: usize, min_score: f32, open:
 	println!();
 
 	for (i, result) in results.iter().take(limit).enumerate() {
-		let name = result.path.file_name()
+		let name = result
+			.path
+			.file_name()
 			.map(|n| n.to_string_lossy().to_string())
 			.unwrap_or_else(|| result.path.to_string_lossy().to_string());
 
-		// Color-code results based on score
-		let score_display = format!("{:.0}%", result.score * 100.0);
+		let score_pct = format!("{:.0}%", result.score * 100.0);
 		let score_colored = if result.score >= 0.15 {
-			score_display.bright_blue()
+			score_pct.bright_blue()
 		} else if result.score >= 0.08 {
-			score_display.yellow()
+			score_pct.yellow()
 		} else {
-			score_display.dimmed()
+			score_pct.dimmed()
 		};
 
-		let rank = format!("#{}", i + 1).bright_blue().bold();
-
-		println!("  {} {} {}", rank, score_colored, name.white());
+		println!(
+			"  {} {} {}",
+			format!("#{}", i + 1).bright_blue().bold(),
+			score_colored,
+			name.white()
+		);
 		println!("      {}", result.path.to_string_lossy().dimmed());
 	}
 
@@ -206,39 +256,39 @@ fn run_search(query: &str, directory: &Path, limit: usize, min_score: f32, open:
 }
 
 fn process_images(images: &[ImageEntry], encoder: &VisionEncoder) -> (usize, usize) {
+	let total = images.len();
 	let mut processed = 0;
 	let mut errors = 0;
-	let total = images.len();
 
-	for (i, entry) in images.iter().enumerate() {
+	println!();
+	println!("{}", "─── Processing ───".bright_blue().bold());
+
+	for (index, entry) in images.iter().enumerate() {
+		let name = &entry.filename;
 		let display = truncate(&entry.path.to_string_lossy(), 50);
-		log(Level::Debug, &format!("Processing image {}: {}", i + 1, display));
-		let image_start = Instant::now();
+		let queue = format!("[{}/{}]", index + 1, total).bright_blue().bold();
 
 		match encoder.process_image(&entry.path) {
-			Ok(result) => {
+			Ok(proc_result) => {
 				let sidecar = ImageSidecar::new(
-					&entry.path,
-					result.image_hash,
-					result.embedding,
-					result.processing_ms,
+					&entry.filename,
+					proc_result.image_hash,
+					proc_result.embedding,
+					proc_result.processing_ms,
 				);
 
 				if let Err(e) = sidecar.save(&entry.sidecar_path) {
-					log(Level::Error, &format!("{} {}", display, format!("Save: {}", e).red()));
+					log(Level::Error, &format!("{} {}: {}", queue, name, e));
 					errors += 1;
 					continue;
 				}
 
-				let elapsed_ms = image_start.elapsed().as_millis();
-				let queue = format!("[{}/{}]", i + 1, total).bright_blue().bold();
-				let timing = format!("{}ms", elapsed_ms).dimmed();
-
+				let timing = format!("{}ms", proc_result.processing_ms).dimmed();
 				log(Level::Success, &format!("{} {} {}", queue, display, timing));
 				processed += 1;
 			}
 			Err(e) => {
-				log(Level::Error, &format!("{} {}", display, format!("{}", e).red()));
+				log(Level::Error, &format!("{} {}: {}", queue, name, e));
 				errors += 1;
 			}
 		}

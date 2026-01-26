@@ -1,150 +1,131 @@
-// Runtime - Execution provider selection and session building
+// Runtime - ONNX execution provider selection and session management
 
 use anyhow::{Context, Result};
 use ort::session::builder::{GraphOptimizationLevel, SessionBuilder};
 use ort::session::Session;
 use std::path::Path;
+use std::sync::OnceLock;
 
+use crate::cli::Provider;
 use crate::logger::{log, Level};
 
-/// Execution provider preference for ONNX Runtime sessions.
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
-pub enum ExecutionProviderPreference {
-	/// Automatically select the best available provider (CUDA → CoreML → CPU)
-	#[default]
-	Auto,
-	/// Force CUDA (NVIDIA GPU)
-	Cuda,
-	/// Force CoreML (Apple Silicon/Neural Engine)
-	CoreML,
-	/// Force CPU execution
-	Cpu,
+static EP_PREFERENCE: OnceLock<Provider> = OnceLock::new();
+
+pub fn set_provider(provider: Provider) {
+	let _ = EP_PREFERENCE.set(provider);
 }
 
-impl ExecutionProviderPreference {
-	pub fn from_flags(cpu: bool, cuda: bool, coreml: bool) -> Self {
-		if cpu {
-			Self::Cpu
-		} else if cuda {
-			Self::Cuda
-		} else if coreml {
-			Self::CoreML
-		} else {
-			Self::Auto
-		}
-	}
-}
-
-/// Thread-safe storage for the global EP preference
-static EP_PREFERENCE: std::sync::OnceLock<ExecutionProviderPreference> = std::sync::OnceLock::new();
-
-/// Sets the global execution provider preference. Call once at startup.
-pub fn set_ep_preference(pref: ExecutionProviderPreference) {
-	let _ = EP_PREFERENCE.set(pref);
-}
-
-/// Gets the current execution provider preference.
-pub fn get_ep_preference() -> ExecutionProviderPreference {
+fn get_provider() -> Provider {
 	EP_PREFERENCE.get().copied().unwrap_or_default()
 }
 
-/// Registers execution providers based on the current preference.
-/// Falls back gracefully: CUDA → CoreML → CPU (for Auto mode)
-pub fn register_execution_providers(builder: &mut SessionBuilder) {
-	let pref = get_ep_preference();
-
-	match pref {
-		ExecutionProviderPreference::Cpu => {
-			log(Level::Info, "Using CPU execution provider (forced)");
+fn register_execution_providers(builder: &mut SessionBuilder) {
+	match get_provider() {
+		Provider::Cpu => {
+			log(Level::Info, "Using CPU execution provider");
 		}
-		ExecutionProviderPreference::Cuda => {
+		Provider::Cuda => {
 			if !try_register_cuda(builder) {
-				log(Level::Error, "CUDA was requested but failed to register");
-				log(Level::Info, "Falling back to CPU execution provider");
+				log(Level::Error, "CUDA requested but unavailable, falling back to CPU");
 			}
 		}
-		ExecutionProviderPreference::CoreML => {
+		Provider::Tensorrt => {
+			if !try_register_tensorrt(builder) {
+				log(Level::Error, "TensorRT requested but unavailable, falling back to CPU");
+			}
+		}
+		Provider::Coreml => {
 			if !try_register_coreml(builder) {
-				log(Level::Error, "CoreML was requested but failed to register");
-				log(Level::Info, "Falling back to CPU execution provider");
+				log(Level::Error, "CoreML requested but unavailable, falling back to CPU");
 			}
 		}
-		ExecutionProviderPreference::Auto => {
-			// Try CUDA first (NVIDIA GPUs)
+		Provider::Auto => {
+			if try_register_tensorrt(builder) {
+				return;
+			}
 			if try_register_cuda(builder) {
 				return;
 			}
-
-			// Try CoreML on macOS (Apple Silicon)
 			if try_register_coreml(builder) {
 				return;
 			}
-
-			// Fall back to CPU
 			log(Level::Info, "Using CPU execution provider");
 		}
 	}
 }
 
-/// Attempts to register CUDA. Returns true on success.
 fn try_register_cuda(builder: &mut SessionBuilder) -> bool {
 	use ort::ep::{ExecutionProvider, CUDA};
 	let cuda = CUDA::default();
-	if cuda.is_available().unwrap_or(false) {
-		match cuda.register(builder) {
-			Ok(_) => {
-				log(Level::Success, "Using CUDA execution provider (GPU)");
-				return true;
-			}
-			Err(e) => {
-				log(Level::Warning, &format!("Failed to register CUDA: {}", e));
-			}
-		}
-	} else {
-		log(Level::Debug, "CUDA not available on this system");
+	if !cuda.is_available().unwrap_or(false) {
+		log(Level::Debug, "CUDA not available");
+		return false;
 	}
-	false
+	match cuda.register(builder) {
+		Ok(_) => {
+			log(Level::Success, "Using CUDA execution provider");
+			true
+		}
+		Err(e) => {
+			log(Level::Warning, &format!("CUDA registration failed: {}", e));
+			false
+		}
+	}
 }
 
-/// Attempts to register CoreML. Returns true on success.
+fn try_register_tensorrt(builder: &mut SessionBuilder) -> bool {
+	use ort::ep::{ExecutionProvider, TensorRT};
+	let trt = TensorRT::default();
+	if !trt.is_available().unwrap_or(false) {
+		log(Level::Debug, "TensorRT not available");
+		return false;
+	}
+	match trt.register(builder) {
+		Ok(_) => {
+			log(Level::Success, "Using TensorRT execution provider");
+			true
+		}
+		Err(e) => {
+			log(Level::Warning, &format!("TensorRT registration failed: {}", e));
+			false
+		}
+	}
+}
+
 fn try_register_coreml(builder: &mut SessionBuilder) -> bool {
 	#[cfg(target_os = "macos")]
 	{
-		use ort::ep::{ExecutionProvider, CoreML};
+		use ort::ep::{CoreML, ExecutionProvider};
 		let coreml = CoreML::default();
-		if coreml.is_available().unwrap_or(false) {
-			match coreml.register(builder) {
-				Ok(_) => {
-					log(Level::Success, "Using CoreML execution provider (Apple Silicon)");
-					return true;
-				}
-				Err(e) => {
-					log(Level::Warning, &format!("Failed to register CoreML: {}", e));
-				}
+		if !coreml.is_available().unwrap_or(false) {
+			log(Level::Debug, "CoreML not available");
+			return false;
+		}
+		match coreml.register(builder) {
+			Ok(_) => {
+				log(Level::Success, "Using CoreML execution provider");
+				return true;
 			}
-		} else {
-			log(Level::Debug, "CoreML not available on this system");
+			Err(e) => {
+				log(Level::Warning, &format!("CoreML registration failed: {}", e));
+			}
 		}
 	}
 	#[cfg(not(target_os = "macos"))]
 	{
 		let _ = builder;
-		log(Level::Debug, "CoreML only available on macOS");
 	}
 	false
 }
 
-/// Creates an ONNX Runtime session with the configured execution providers.
 pub fn create_session(model_path: &Path) -> Result<Session> {
-	let mut builder = Session::builder().context("Session builder")?;
-
+	let mut builder = Session::builder().context("Failed to create session builder")?;
 	register_execution_providers(&mut builder);
-
 	builder
 		.with_optimization_level(GraphOptimizationLevel::Level3)
-		.context("Optimization")?
+		.context("Failed to set optimization level")?
 		.with_intra_threads(4)
-		.context("Threads")?
+		.context("Failed to set thread count")?
 		.commit_from_file(model_path)
-		.context("Load model")
+		.context("Failed to load model")
 }

@@ -1,4 +1,4 @@
-// Processor - SigLIP2 vision encoder for image embeddings
+// Processor - Vision encoder for image embeddings
 
 use anyhow::{Context, Result};
 use image::{imageops::FilterType, ImageReader};
@@ -8,10 +8,11 @@ use std::path::Path;
 use std::sync::Mutex;
 use std::time::Instant;
 
-use crate::config::{get_vision_model_path, INPUT_SIZE, EMBEDDING_DIM};
+use crate::config::{get_vision_model_path, INPUT_SIZE};
+use crate::embedding::{extract_vision_embedding, normalize};
+use crate::logger::{log, Level};
 use crate::runtime::create_session;
 use crate::sidecar::compute_file_hash;
-use crate::logger::{log, Level};
 
 pub struct VisionEncoder {
 	session: Mutex<ort::session::Session>,
@@ -48,57 +49,33 @@ impl VisionEncoder {
 
 	fn encode(&self, input: Array<f32, IxDyn>) -> Result<Vec<f32>> {
 		log(Level::Debug, "Running vision inference");
-		let input_value = Value::from_array(input).context("Tensor creation")?;
-		let mut session = self.session.lock().map_err(|e| anyhow::anyhow!("Lock: {}", e))?;
+		let input_value = Value::from_array(input).context("Failed to create tensor")?;
+		let mut session = self.session.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
 
-		let outputs = session.run(ort::inputs!["pixel_values" => input_value])
-			.context("Vision inference")?;
+		let outputs = session
+			.run(ort::inputs!["pixel_values" => input_value])
+			.context("Vision inference failed")?;
 
 		// Use pooler_output (second output) for aligned embeddings
-		let output = outputs.iter().nth(1)
+		let output = outputs
+			.iter()
+			.nth(1)
 			.or_else(|| outputs.iter().next())
-			.context("No output")?
+			.context("No output tensor")?
 			.1;
 
 		let (shape, data) = output.try_extract_tensor::<f32>()?;
-		let embedding = extract_embedding(data, &shape);
-		Ok(normalize(&embedding))
+		Ok(normalize(&extract_vision_embedding(data, &shape)))
 	}
-}
-
-fn extract_embedding(data: &[f32], shape: &[i64]) -> Vec<f32> {
-	let dims: Vec<usize> = shape.iter().map(|&x| x as usize).collect();
-	match dims.as_slice() {
-		[1, dim] if *dim == EMBEDDING_DIM => data.to_vec(),
-		[1, num_patches, dim] if *dim == EMBEDDING_DIM => {
-			// Apply mean pooling across patches if needed
-			let mut pooled = vec![0.0; *dim];
-			for patch_idx in 0..*num_patches {
-				let start = patch_idx * dim;
-				for (i, val) in pooled.iter_mut().enumerate() {
-					*val += data[start + i];
-				}
-			}
-			pooled.iter_mut().for_each(|v| *v /= *num_patches as f32);
-			pooled
-		},
-		_ => data.iter().take(EMBEDDING_DIM).copied().collect(),
-	}
-}
-
-fn normalize(v: &[f32]) -> Vec<f32> {
-	let norm: f32 = v.iter().map(|x| x * x).sum::<f32>().sqrt();
-	if norm > 0.0 { v.iter().map(|x| x / norm).collect() } else { v.to_vec() }
 }
 
 fn preprocess_image(path: &Path) -> Result<Array<f32, IxDyn>> {
-	log(Level::Debug, &format!("Preprocessing image: {}", path.display()));
 	let img = ImageReader::open(path)
-		.context("Open")?
+		.context("Failed to open image")?
 		.with_guessed_format()
-		.context("Format")?
+		.context("Failed to detect format")?
 		.decode()
-		.context("Decode")?;
+		.context("Failed to decode image")?;
 
 	let resized = img.resize_exact(INPUT_SIZE, INPUT_SIZE, FilterType::CatmullRom);
 	let rgb = resized.to_rgb8();

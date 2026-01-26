@@ -1,6 +1,31 @@
-use clap::{builder::Styles, Parser, Subcommand};
+use clap::{builder::Styles, Parser, Subcommand, ValueEnum};
 use colored::Colorize;
 use std::path::PathBuf;
+
+/// Execution provider for ONNX Runtime
+#[derive(Debug, Clone, Copy, Default, ValueEnum)]
+pub enum Provider {
+	/// Auto-detect best available (TensorRT → CUDA → CoreML → CPU)
+	#[default]
+	Auto,
+	/// CPU only
+	Cpu,
+	/// NVIDIA CUDA GPU
+	Cuda,
+	/// NVIDIA TensorRT (optimized inference)
+	Tensorrt,
+	/// Apple CoreML (macOS only)
+	Coreml,
+}
+
+fn parse_weight(s: &str) -> Result<f32, String> {
+	let val: f32 = s.parse().map_err(|_| format!("'{}' is not a valid number", s))?;
+	if val < 0.0 || val > 1.0 {
+		Err(format!("weight must be between 0.0 and 1.0, got {}", val))
+	} else {
+		Ok(val)
+	}
+}
 
 fn styles() -> Styles {
 	Styles::styled()
@@ -24,6 +49,7 @@ fn styles() -> Styles {
 		"{title}
   {scout} {scan}    {scan_args}   {scan_desc}
   {scout} {search}  {search_args}      {search_desc}
+  {scout} {search}  {search_img_args}      {search_img_desc}
   {scout} {help}    {help_args}              {help_desc},
   {scout} {live}    {live_args}      {live_desc}",
 		title = "Examples:".bright_blue().bold(),
@@ -34,6 +60,8 @@ fn styles() -> Styles {
 		search = "search".yellow(),
 		search_args = "-d ./images/",
 		search_desc = "Search by description".dimmed(),
+		search_img_args = "\"green\" -i car.png -w 0.3",
+		search_img_desc = "Combined text + image".dimmed(),
 		help = "help".yellow(),
 		help_args = "scan",
 		help_desc = "Show help for scan".dimmed(),
@@ -47,17 +75,9 @@ pub struct Cli {
 	#[arg(short = 'v', long = "verbose", global = true)]
 	pub verbose: bool,
 
-	/// Force CPU execution (no GPU acceleration)
-	#[arg(long = "cpu", global = true, conflicts_with_all = ["cuda", "coreml"])]
-	pub cpu: bool,
-
-	/// Force CUDA execution (NVIDIA GPU)
-	#[arg(long = "cuda", global = true, conflicts_with_all = ["cpu", "coreml"])]
-	pub cuda: bool,
-
-	/// Force CoreML execution (Apple Silicon)
-	#[arg(long = "coreml", global = true, conflicts_with_all = ["cpu", "cuda"])]
-	pub coreml: bool,
+	/// Execution provider: auto, cpu, cuda, coreml
+	#[arg(short = 'p', long = "provider", global = true, default_value = "auto")]
+	pub provider: Provider,
 
 	#[command(subcommand)]
 	pub command: Command,
@@ -100,15 +120,27 @@ pub enum Command {
 		exclude_patterns: Vec<String>,
 	},
 
-	/// Search images by text description
+	/// Search images by text description and/or reference image
 	Search {
-		/// Search query
-		#[arg(value_name = "QUERY", required = true)]
-		query: String,
+		/// Search query (text description)
+		#[arg(value_name = "QUERY")]
+		query: Option<String>,
+
+		/// Reference image to find similar images
+		#[arg(short = 'i', long = "image", value_name = "PATH")]
+		image: Option<PathBuf>,
+
+		/// Weight for text vs image (0.0 = image only, 1.0 = text only, 0.5 = balanced)
+		#[arg(short = 'w', long = "weight", default_value_t = 0.5, value_parser = parse_weight)]
+		weight: f32,
 
 		/// Directory to search
 		#[arg(short = 'd', long = "dir", default_value = ".")]
 		directory: PathBuf,
+
+		/// Search directories recursively
+		#[arg(short = 'r', long = "recursive")]
+		recursive: bool,
 
 		/// Number of results
 		#[arg(short = 'n', long = "limit", default_value_t = 10)]
@@ -121,6 +153,10 @@ pub enum Command {
 		/// Open best match in default viewer
 		#[arg(short = 'o', long = "open")]
 		open: bool,
+
+		/// Include the reference image in results (useful for duplicate detection)
+		#[arg(long = "include-ref")]
+		include_ref: bool,
 	},
 
 	/// Live interactive search in terminal
@@ -128,6 +164,10 @@ pub enum Command {
 		/// Directory to search
 		#[arg(short = 'd', long = "dir", default_value = ".")]
 		directory: PathBuf,
+
+		/// Search directories recursively
+		#[arg(short = 'r', long = "recursive")]
+		recursive: bool,
 	},
 
 	/// Show help for a subcommand

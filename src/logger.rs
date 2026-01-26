@@ -1,12 +1,17 @@
-// Logger - Colored console output with timestamps
+// Logger - Colored console output
 
 use chrono::Local;
 use colored::*;
+use std::sync::atomic::{AtomicBool, Ordering};
 
-static mut VERBOSE: bool = false;
+static VERBOSE: AtomicBool = AtomicBool::new(false);
 
 pub fn set_verbose(v: bool) {
-	unsafe { VERBOSE = v; }
+	VERBOSE.store(v, Ordering::Relaxed);
+}
+
+pub fn is_verbose() -> bool {
+	VERBOSE.load(Ordering::Relaxed)
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -18,40 +23,33 @@ pub enum Level {
 	Debug,
 }
 
-/// Prints a timestamped, colored log message to stdout.
 pub fn log(level: Level, message: &str) {
-	if level == Level::Debug {
-		unsafe {
-			if !VERBOSE {
-				return;
-			}
-		}
+	if level == Level::Debug && !is_verbose() {
+		return;
 	}
 
 	let time = Local::now().format("%H:%M:%S").to_string().dimmed();
 	let icon = match level {
-		Level::Info =>    "ℹ".blue().bold(),
+		Level::Info => "ℹ".blue().bold(),
 		Level::Success => "✔".bright_green().bold(),
 		Level::Warning => "⚠".yellow().bold(),
-		Level::Error =>   "✘".red().bold(),
-		Level::Debug =>   "⚙".bright_blue().bold(),
+		Level::Error => "✘".red().bold(),
+		Level::Debug => "⚙".bright_blue().bold(),
 	};
 	println!("[{}] {} {}", time, icon, message);
 }
 
-/// Prints a section header with visual separation.
 pub fn header(title: &str) {
 	println!();
 	println!("{}", format!("─── {} ───", title).bright_blue().bold());
 }
 
-/// Prints a processing summary with statistics.
 pub fn summary(processed: usize, skipped: usize, errors: usize, duration_secs: f32) {
 	println!();
 	header("Summary");
 
 	if processed > 0 {
-		println!("  {} {}", "Processed:".bright_blue(), processed);
+		println!("  {} {}", "Processed:".green(), processed);
 	}
 	if skipped > 0 {
 		println!("  {} {}", "Skipped:".yellow(), skipped);

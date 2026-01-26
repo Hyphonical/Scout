@@ -1,4 +1,4 @@
-// Live Search TUI for Image Sidecars
+// Live Search TUI
 
 use anyhow::Result;
 use crossterm::{
@@ -10,7 +10,7 @@ use ratatui::{
 	layout::{Constraint, Direction, Layout},
 	style::{Color, Modifier, Style},
 	text::{Line, Span},
-	widgets::{Block, Borders, List, ListItem, Paragraph},
+	widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
 	Terminal,
 };
 use std::{
@@ -19,11 +19,11 @@ use std::{
 	time::{Duration, Instant},
 };
 
-use crate::embedder::{cosine_similarity, TextEncoder};
-use crate::sidecar::{iter_sidecars, ImageSidecar};
 use crate::config::DEBOUNCE_TIME_MS;
+use crate::embedder::TextEncoder;
+use crate::embedding::cosine_similarity;
+use crate::sidecar::{current_version, iter_sidecars, ImageSidecar};
 
-/// In-memory cache of an image's embedding to avoid disk I/O during search
 struct CachedImage {
 	path: PathBuf,
 	embedding: Vec<f32>,
@@ -31,24 +31,35 @@ struct CachedImage {
 
 struct AppState {
 	query: String,
+	cursor_visible: bool,
 	results: Vec<(PathBuf, f32)>,
+	selected: usize,
 	index: Vec<CachedImage>,
 	encoder: TextEncoder,
-	status_message: String,
-	is_loading: bool,
+	status: String,
 }
 
-pub fn run_live_search(directory: &Path) -> Result<()> {
-	// 1. Setup Terminal
+impl AppState {
+	fn select_next(&mut self) {
+		if !self.results.is_empty() {
+			self.selected = (self.selected + 1).min(self.results.len() - 1);
+		}
+	}
+
+	fn select_prev(&mut self) {
+		if self.selected > 0 {
+			self.selected -= 1;
+		}
+	}
+}
+
+pub fn run_live_search(directory: &Path, recursive: bool) -> Result<()> {
 	enable_raw_mode()?;
 	let mut stdout = io::stdout();
 	execute!(stdout, EnterAlternateScreen)?;
 	let backend = ratatui::backend::CrosstermBackend::new(stdout);
 	let mut terminal = Terminal::new(backend)?;
 
-	// 2. Initialize State
-	// We use Arc/Mutex for the encoder just in case we want to thread this later,
-	// though for TUI strictly, single threaded with non-blocking poll is often fine.
 	let encoder = match TextEncoder::new() {
 		Ok(e) => e,
 		Err(e) => {
@@ -59,93 +70,104 @@ pub fn run_live_search(directory: &Path) -> Result<()> {
 
 	let mut app = AppState {
 		query: String::new(),
+		cursor_visible: true,
 		results: Vec::new(),
+		selected: 0,
 		index: Vec::new(),
 		encoder,
-		status_message: "Loading index...".to_string(),
-		is_loading: true,
+		status: "Loading index...".to_string(),
 	};
 
-	// 3. Initial Draw (Loading screen)
-	terminal.draw(|f| ui(f, &app))?;
+	terminal.draw(|f| ui(f, &mut app))?;
 
-	// 4. Load Index (Pre-load JSON sidecars into RAM)
-	// In a real generic app, you might want to do this in a thread to keep UI responsive,
-	// but for a CLI tool start-up, a synchronous load with a spinner is okay.
 	let root = directory.canonicalize().unwrap_or_else(|_| directory.to_path_buf());
-	let mut loaded_count = 0;
+	let mut loaded = 0;
+	let mut outdated = 0;
 
-	for sidecar_path in iter_sidecars(&root) {
-		if let Ok(content) = std::fs::read_to_string(&sidecar_path) {
-			if let Ok(sidecar) = serde_json::from_str::<ImageSidecar>(&content) {
-				app.index.push(CachedImage {
-					path: PathBuf::from(sidecar.source),
-					embedding: sidecar.embedding,
-				});
-				loaded_count += 1;
+	for (sidecar_path, base_dir) in iter_sidecars(&root, recursive) {
+		if let Ok(sidecar) = ImageSidecar::load(&sidecar_path) {
+			if !sidecar.is_current_version() {
+				outdated += 1;
+			}
+			let full_path = base_dir.join(&sidecar.filename);
+			app.index.push(CachedImage {
+				path: full_path,
+				embedding: sidecar.embedding,
+			});
+			loaded += 1;
 
-				// Optional: Update loading status every 100 images
-				if loaded_count % 100 == 0 {
-					app.status_message = format!("Loading index: {} images...", loaded_count);
-					terminal.draw(|f| ui(f, &app))?;
-				}
+			if loaded % 100 == 0 {
+				app.status = format!("Loading: {}...", loaded);
+				terminal.draw(|f| ui(f, &mut app))?;
 			}
 		}
 	}
 
-	app.is_loading = false;
-	app.status_message = format!("Ready. Indexed {} images.", loaded_count);
+	if outdated > 0 {
+		app.status = format!(
+			"Ready. {} indexed ({} outdated, run 'scout scan -f' to upgrade to v{})",
+			loaded, outdated, current_version()
+		);
+	} else {
+		app.status = format!("Ready. {} images indexed.", loaded);
+	}
 
-	// 5. Main Event Loop
-	let mut last_input_time = Instant::now();
-	let mut last_searched_query = String::new();
-	// Debounce time: wait this long after typing stops to search
-	let debounce_duration = Duration::from_millis(DEBOUNCE_TIME_MS);
+	let mut last_input = Instant::now();
+	let mut last_query = String::new();
+	let mut last_blink = Instant::now();
+	let debounce = Duration::from_millis(DEBOUNCE_TIME_MS);
+	let blink_rate = Duration::from_millis(530);
 
 	loop {
-		terminal.draw(|f| ui(f, &app))?;
+		if last_blink.elapsed() >= blink_rate {
+			app.cursor_visible = !app.cursor_visible;
+			last_blink = Instant::now();
+		}
 
-		// Poll for events (100ms tick rate)
-		if event::poll(Duration::from_millis(100))? {
+		terminal.draw(|f| ui(f, &mut app))?;
+
+		if event::poll(Duration::from_millis(50))? {
 			if let Event::Key(key) = event::read()? {
 				if key.kind == KeyEventKind::Press {
+					app.cursor_visible = true;
+					last_blink = Instant::now();
+
 					match key.code {
 						KeyCode::Esc => break,
 						KeyCode::Char(c) => {
 							app.query.push(c);
-							last_input_time = Instant::now();
+							last_input = Instant::now();
 						}
 						KeyCode::Backspace => {
 							app.query.pop();
-							last_input_time = Instant::now();
+							last_input = Instant::now();
 						}
 						KeyCode::Enter => {
-							// Force search immediately on Enter
 							perform_search(&mut app);
-							last_searched_query = app.query.clone();
+							last_query = app.query.clone();
 						}
+						KeyCode::Down | KeyCode::Tab => app.select_next(),
+						KeyCode::Up | KeyCode::BackTab => app.select_prev(),
 						_ => {}
 					}
 				}
 			}
 		}
 
-		// Check Debounce logic
-		let time_since_input = last_input_time.elapsed();
-		if time_since_input > debounce_duration && app.query != last_searched_query {
+		if last_input.elapsed() > debounce && app.query != last_query {
 			if !app.query.is_empty() {
-				app.status_message = "Searching...".to_string();
-				terminal.draw(|f| ui(f, &app))?; // Show "Searching..." immediately
+				app.status = "Searching...".to_string();
+				terminal.draw(|f| ui(f, &mut app))?;
 				perform_search(&mut app);
 			} else {
 				app.results.clear();
-				app.status_message = format!("Ready. Indexed {} images.", app.index.len());
+				app.selected = 0;
+				app.status = format!("Ready. {} images indexed.", app.index.len());
 			}
-			last_searched_query = app.query.clone();
+			last_query = app.query.clone();
 		}
 	}
 
-	// 6. Cleanup
 	cleanup_terminal()?;
 	Ok(())
 }
@@ -153,29 +175,27 @@ pub fn run_live_search(directory: &Path) -> Result<()> {
 fn perform_search(app: &mut AppState) {
 	let start = Instant::now();
 
-	// Embed query
 	let query_emb = match app.encoder.embed(&app.query) {
 		Ok(e) => e,
 		Err(e) => {
-			app.status_message = format!("Error embedding query: {}", e);
+			app.status = format!("Error: {}", e);
 			return;
 		}
 	};
 
-	// Search in-memory index
-	let mut scores: Vec<(PathBuf, f32)> = app.index
+	let mut scores: Vec<(PathBuf, f32)> = app
+		.index
 		.iter()
 		.map(|img| (img.path.clone(), cosine_similarity(&query_emb, &img.embedding)))
-		.filter(|(_, score)| *score > 0.0) // Filter totally irrelevant
+		.filter(|(_, s)| *s > 0.0)
 		.collect();
 
-	// Sort desc
 	scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+	app.results = scores.into_iter().take(50).collect();
+	app.selected = 0;
 
-	app.results = scores.into_iter().take(20).collect();
-
-	let duration = start.elapsed();
-	app.status_message = format!("Found {} matches in {:.0}ms", app.results.len(), duration.as_millis());
+	let ms = start.elapsed().as_millis();
+	app.status = format!("{} matches in {}ms", app.results.len(), ms);
 }
 
 fn cleanup_terminal() -> Result<()> {
@@ -184,63 +204,85 @@ fn cleanup_terminal() -> Result<()> {
 	Ok(())
 }
 
-fn ui(f: &mut ratatui::Frame, app: &AppState) {
-	let chunks = Layout::default()
+fn ui(f: &mut ratatui::Frame, app: &mut AppState) {
+	let main_chunks = Layout::default()
 		.direction(Direction::Vertical)
 		.constraints([
-			Constraint::Length(3), // Search Bar
-			Constraint::Min(1),    // Results
-			Constraint::Length(1), // Status Bar
+			Constraint::Length(3),
+			Constraint::Min(1),
+			Constraint::Length(1),
 		])
 		.split(f.area());
 
-	// Search Bar
+	// Search bar with blinking cursor
+	let cursor = if app.cursor_visible { "|" } else { " " };
 	let search_text = if app.query.is_empty() {
 		Line::from(vec![
 			Span::styled(" 🔍 ", Style::default()),
-			Span::styled("Image of...", Style::default().fg(Color::DarkGray)),
+			Span::styled("Type to search...", Style::default().fg(Color::DarkGray)),
+			Span::styled(cursor, Style::default().fg(Color::Cyan)),
 		])
 	} else {
 		Line::from(vec![
 			Span::styled(" 🔍 ", Style::default()),
 			Span::styled(&app.query, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+			Span::styled(cursor, Style::default().fg(Color::Cyan)),
 		])
 	};
 
-	let search_block = Paragraph::new(search_text)
-		.block(Block::default().borders(Borders::ALL).title(" Search ").border_style(Style::default().fg(Color::Blue)));
-	f.render_widget(search_block, chunks[0]);
+	let search_block = Paragraph::new(search_text).block(
+		Block::default()
+			.borders(Borders::ALL)
+			.title(" Search ")
+			.border_style(Style::default().fg(Color::Blue)),
+	);
+	f.render_widget(search_block, main_chunks[0]);
 
-	// Results List
-	let items: Vec<ListItem> = app.results
+	render_results(f, app, main_chunks[1]);
+
+	let status = Paragraph::new(app.status.as_str()).style(Style::default().fg(Color::DarkGray));
+	f.render_widget(status, main_chunks[2]);
+}
+
+fn render_results(f: &mut ratatui::Frame, app: &AppState, area: ratatui::layout::Rect) {
+	let items: Vec<ListItem> = app
+		.results
 		.iter()
 		.enumerate()
 		.map(|(i, (path, score))| {
 			let filename = path.file_name().unwrap_or_default().to_string_lossy();
 			let score_pct = (score * 100.0) as u32;
+			let is_selected = i == app.selected;
+			let prefix = if is_selected { "▶ " } else { "  " };
 
-			// Color code score
-			let score_style = if score_pct > 20 { Style::default().fg(Color::Green) }
-							 else if score_pct > 10 { Style::default().fg(Color::Yellow) }
-							 else { Style::default().fg(Color::DarkGray) };
+			let score_style = if score_pct > 20 {
+				Style::default().fg(Color::Green)
+			} else if score_pct > 10 {
+				Style::default().fg(Color::Yellow)
+			} else {
+				Style::default().fg(Color::DarkGray)
+			};
 
-			let content = Line::from(vec![
-				Span::styled(format!(" {:2}. ", i + 1), Style::default().fg(Color::DarkGray)),
+			let name_style = if is_selected {
+				Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+			} else {
+				Style::default().fg(Color::White)
+			};
+
+			ListItem::new(Line::from(vec![
+				Span::styled(prefix, Style::default().fg(Color::Cyan)),
 				Span::styled(format!("{:3}% ", score_pct), score_style),
-				Span::styled(filename, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
-				Span::styled(format!("  ({})", path.display()), Style::default().fg(Color::DarkGray)),
-			]);
-
-			ListItem::new(content)
+				Span::styled(filename.to_string(), name_style),
+			]))
 		})
 		.collect();
 
-	let results_block = List::new(items)
-		.block(Block::default().borders(Borders::ALL).title(" Results "));
-	f.render_widget(results_block, chunks[1]);
+	let mut state = ListState::default();
+	state.select(Some(app.selected));
 
-	// Status Bar
-	let status = Paragraph::new(app.status_message.as_str())
-		.style(Style::default().fg(Color::DarkGray));
-	f.render_widget(status, chunks[2]);
+	let list = List::new(items)
+		.block(Block::default().borders(Borders::ALL).title(" Results "))
+		.highlight_style(Style::default().bg(Color::DarkGray));
+
+	f.render_stateful_widget(list, area, &mut state);
 }

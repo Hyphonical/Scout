@@ -1,4 +1,4 @@
-// Embedder - SigLIP2 text encoder for query embeddings
+// Embedder - Text encoder for query embeddings
 
 use anyhow::{Context, Result};
 use ndarray::Array2;
@@ -6,9 +6,10 @@ use ort::value::Value;
 use std::sync::Mutex;
 use tokenizers::Tokenizer;
 
-use crate::config::{get_text_model_path, get_tokenizer_path, EMBEDDING_DIM};
-use crate::runtime::create_session;
+use crate::config::{get_text_model_path, get_tokenizer_path};
+use crate::embedding::{extract_text_embedding, normalize};
 use crate::logger::{log, Level};
+use crate::runtime::create_session;
 
 pub struct TextEncoder {
 	session: Mutex<ort::session::Session>,
@@ -30,8 +31,10 @@ impl TextEncoder {
 
 	pub fn embed(&self, text: &str) -> Result<Vec<f32>> {
 		log(Level::Debug, &format!("Embedding text: {}", text));
-		let encoding = self.tokenizer.encode(text, true)
-			.map_err(|e| anyhow::anyhow!("Tokenize: {}", e))?;
+		let encoding = self
+			.tokenizer
+			.encode(text, true)
+			.map_err(|e| anyhow::anyhow!("Tokenization failed: {}", e))?;
 
 		let input_ids: Vec<i64> = encoding.get_ids().iter().map(|&x| x as i64).collect();
 		let seq_len = input_ids.len();
@@ -39,44 +42,21 @@ impl TextEncoder {
 		let input_ids_arr = Array2::from_shape_vec((1, seq_len), input_ids)?;
 		let input_ids_val = Value::from_array(input_ids_arr)?;
 
-		let mut session = self.session.lock().map_err(|e| anyhow::anyhow!("Lock: {}", e))?;
+		let mut session = self.session.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
 
-		let outputs = session.run(ort::inputs![
-			"input_ids" => input_ids_val,
-		]).context("Text inference")?;
-		log(Level::Debug, "Text inference completed");
+		let outputs = session
+			.run(ort::inputs!["input_ids" => input_ids_val])
+			.context("Text inference failed")?;
 
 		// Use pooler_output (second output) for aligned embeddings
-		let output = outputs.iter().nth(1)
+		let output = outputs
+			.iter()
+			.nth(1)
 			.or_else(|| outputs.iter().next())
-			.context("No output")?
+			.context("No output tensor")?
 			.1;
 
 		let (shape, data) = output.try_extract_tensor::<f32>()?;
-		let embedding = extract_embedding(data, &shape);
-		Ok(normalize(&embedding))
+		Ok(normalize(&extract_text_embedding(data, &shape)))
 	}
-}
-
-fn extract_embedding(data: &[f32], shape: &[i64]) -> Vec<f32> {
-	let dims: Vec<usize> = shape.iter().map(|&x| x as usize).collect();
-	match dims.as_slice() {
-		[1, dim] if *dim == EMBEDDING_DIM => data.to_vec(),
-		[1, seq_len, dim] if *dim == EMBEDDING_DIM => {
-			// Extract last token embedding for text
-			let start = (seq_len - 1) * dim;
-			let end = start + EMBEDDING_DIM;
-			data[start..end].to_vec()
-		},
-		_ => data.iter().take(EMBEDDING_DIM).copied().collect(),
-	}
-}
-
-fn normalize(v: &[f32]) -> Vec<f32> {
-	let norm: f32 = v.iter().map(|x| x * x).sum::<f32>().sqrt();
-	if norm > 0.0 { v.iter().map(|x| x / norm).collect() } else { v.to_vec() }
-}
-
-pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
-	a.iter().zip(b.iter()).map(|(x, y)| x * y).sum()
 }

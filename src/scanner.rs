@@ -9,17 +9,19 @@ use walkdir::WalkDir;
 use crate::cli::ScanFilters;
 use crate::config::{IMAGE_EXTENSIONS, SIDECAR_DIR};
 use crate::logger::{log, Level};
-use crate::sidecar::{compute_file_hash, find_sidecar_by_hash, get_sidecar_path};
+use crate::sidecar::{compute_file_hash, find_sidecar_by_hash, get_sidecar_path, ImageSidecar};
 
 pub struct ScanResult {
 	pub images: Vec<ImageEntry>,
 	pub skipped: Vec<PathBuf>,
+	pub outdated: usize,
 	pub filtered: Vec<FilterReason>,
 	pub errors: Vec<String>,
 }
 
 pub struct ImageEntry {
 	pub path: PathBuf,
+	pub filename: String,
 	pub sidecar_path: PathBuf,
 }
 
@@ -32,10 +34,6 @@ pub struct FilterReason {
 impl ScanResult {
 	pub fn total(&self) -> usize {
 		self.images.len() + self.skipped.len()
-	}
-
-	pub fn total_found(&self) -> usize {
-		self.total() + self.filtered.len()
 	}
 }
 
@@ -85,6 +83,7 @@ pub fn scan_directory(
 	let mut result = ScanResult {
 		images: Vec::new(),
 		skipped: Vec::new(),
+		outdated: 0,
 		filtered: Vec::new(),
 		errors: Vec::new(),
 	};
@@ -126,19 +125,43 @@ pub fn scan_directory(
 				continue;
 			}
 		};
+
+		// Get the directory containing the image
+		let image_dir = canonical.parent().unwrap_or(&canonical).to_path_buf();
+		let filename = canonical
+			.file_name()
+			.map(|n| n.to_string_lossy().to_string())
+			.unwrap_or_default();
+
 		log(
 			Level::Debug,
-			&format!("Computed hash for {}: {}", canonical.display(), &hash[..8]),
+			&format!("Computed hash for {}: {}", filename, &hash[..8]),
 		);
 
-		if !force && find_sidecar_by_hash(&hash, &root).is_some() {
-			result.skipped.push(canonical);
-			continue;
+		// Check for existing sidecar in the image's directory
+		if !force {
+			if let Some(sidecar_path) = find_sidecar_by_hash(&hash, &image_dir) {
+				// Check if sidecar version matches current program version
+				if let Ok(sidecar) = ImageSidecar::load(&sidecar_path) {
+					if sidecar.is_current_version() {
+						result.skipped.push(canonical);
+						continue;
+					}
+					// Outdated version - needs reprocessing
+					result.outdated += 1;
+					log(
+						Level::Debug,
+						&format!("Outdated sidecar for {}: v{}", filename, sidecar.version),
+					);
+				}
+				// If sidecar can't be loaded, reprocess it
+			}
 		}
 
 		result.images.push(ImageEntry {
 			path: canonical,
-			sidecar_path: get_sidecar_path(&hash, &root),
+			filename,
+			sidecar_path: get_sidecar_path(&hash, &image_dir),
 		});
 	}
 
