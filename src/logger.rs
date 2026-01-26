@@ -14,6 +14,21 @@ pub fn is_verbose() -> bool {
 	VERBOSE.load(Ordering::Relaxed)
 }
 
+pub fn hyperlink(text: &str, path: &std::path::Path) -> String {
+	let absolute = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+
+	// Convert to URI-safe format
+	let uri = if cfg!(windows) {
+		let path_str = absolute.to_string_lossy();
+		let cleaned = path_str.strip_prefix(r"\\?\").unwrap_or(&path_str);
+		format!("file:///{}", cleaned.replace('\\', "/"))
+	} else {
+		format!("file://{}", absolute.display())
+	};
+
+	format!("\x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\", uri, text)
+}
+
 #[derive(Clone, Copy, PartialEq)]
 pub enum Level {
 	Info,

@@ -2,30 +2,29 @@
 
 mod cli;
 mod config;
-mod embedder;
-mod embedding;
 mod live;
 mod logger;
-mod processor;
+mod models;
 mod runtime;
 mod scanner;
 mod search;
 mod sidecar;
+mod types;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::{CommandFactory, Parser};
 use colored::Colorize;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::Instant;
 
-use cli::{Cli, Command, ScanFilters};
+use cli::{Cli, Command};
 use logger::{log, summary, Level};
-use processor::VisionEncoder;
+use models::ModelManager;
 use runtime::set_provider;
-use scanner::{scan_directory, ImageEntry};
-use search::{search_with_query, SearchQuery};
+use scanner::{scan_directory, ScanFilters};
+use search::{search, SearchQuery};
 use sidecar::ImageSidecar;
-use live::run_live_search;
+use types::CombineWeight;
 
 fn main() -> Result<()> {
 	let cli = Cli::parse();
@@ -44,20 +43,34 @@ fn main() -> Result<()> {
 			max_size_mb,
 			exclude_patterns,
 		} => {
-			let filters = ScanFilters::from_scan_command(
-				min_width,
-				min_height,
-				min_size_kb,
-				max_size_mb,
-				exclude_patterns,
-			);
+			let filters = ScanFilters::new(min_width, min_height, min_size_kb, max_size_mb, exclude_patterns);
 			run_scan(&directory, recursive, force, &filters)
 		}
-		Command::Search { query, image, weight, directory, recursive, limit, min_score, open, include_ref } => {
-			run_search(query.as_deref(), image.as_ref(), weight, &directory, recursive, limit, min_score, open, include_ref)
+		Command::Search {
+			query,
+			image,
+			weight,
+			directory,
+			recursive,
+			limit,
+			min_score,
+			open,
+			include_ref,
+		} => {
+			run_search(
+				query.as_deref(),
+				image.as_deref(),
+				weight,
+				&directory,
+				recursive,
+				limit,
+				min_score,
+				open,
+				include_ref,
+			)
 		}
 		Command::Live { directory, recursive } => {
-			run_live_search(&directory, recursive)
+			live::run(&directory, recursive)
 		}
 		Command::Help { subcommand } => {
 			let mut cmd = Cli::command();
@@ -76,34 +89,17 @@ fn main() -> Result<()> {
 	}
 }
 
-fn run_scan(
-	directory: &Path,
-	recursive: bool,
-	force: bool,
-	filters: &ScanFilters,
-) -> Result<()> {
-	println!();
-	println!(
-		"{}",
-		format!("─── Scout v{} ───", env!("CARGO_PKG_VERSION"))
-			.bright_blue()
-			.bold()
-	);
+fn run_scan(directory: &Path, recursive: bool, force: bool, filters: &ScanFilters) -> Result<()> {
+	print_header();
 
 	log(Level::Info, "Scanning for images...");
 	let scan = scan_directory(directory, recursive, force, filters)?;
 
-	if !scan.filtered.is_empty() {
+	if scan.filtered_count > 0 {
 		log(
 			Level::Info,
-			&format!("Filtered {} images (--verbose for details)", scan.filtered.len()),
+			&format!("Filtered {} images (--verbose for details)", scan.filtered_count),
 		);
-		for filtered in &scan.filtered {
-			log(
-				Level::Debug,
-				&format!("Filtered: {} - {}", filtered.path.display(), filtered.reason),
-			);
-		}
 	}
 
 	log(
@@ -111,41 +107,39 @@ fn run_scan(
 		&format!(
 			"Found {} images ({} to process, {} indexed, {} filtered)",
 			scan.total(),
-			scan.images.len(),
-			scan.skipped.len(),
-			scan.filtered.len()
+			scan.to_process.len(),
+			scan.indexed_count,
+			scan.filtered_count
 		),
 	);
 
-	if scan.outdated > 0 {
+	if scan.outdated_count > 0 {
 		log(
 			Level::Info,
-			&format!("Upgrading {} outdated sidecars to v{}", scan.outdated, env!("CARGO_PKG_VERSION")),
+			&format!("Upgrading {} outdated sidecars to v{}", scan.outdated_count, env!("CARGO_PKG_VERSION")),
 		);
 	}
 
-	for err in &scan.errors {
-		log(Level::Warning, err);
+	if scan.error_count > 0 {
+		log(Level::Warning, &format!("{} errors during scan", scan.error_count));
 	}
 
-	if scan.images.is_empty() {
+	if scan.to_process.is_empty() {
 		log(Level::Info, "No new images to process");
 		return Ok(());
 	}
 
 	log(Level::Info, "Loading vision model...");
 	let load_start = Instant::now();
-	let encoder = VisionEncoder::new().context("Failed to load vision model")?;
-	log(
-		Level::Success,
-		&format!("Model ready in {:.2}s", load_start.elapsed().as_secs_f32()),
-	);
+	let mut models = ModelManager::with_vision()?;
+	log(Level::Success, &format!("Model ready in {:.2}s", load_start.elapsed().as_secs_f32()));
 
 	let process_start = Instant::now();
-	let (processed, errors) = process_images(&scan.images, &encoder);
+	let (processed, errors) = process_images(&scan.to_process, &mut models);
+
 	summary(
 		processed,
-		scan.skipped.len(),
+		scan.indexed_count,
 		errors,
 		process_start.elapsed().as_secs_f32(),
 	);
@@ -161,35 +155,29 @@ fn run_scan(
 
 fn run_search(
 	query: Option<&str>,
-	image: Option<&PathBuf>,
+	image: Option<&Path>,
 	weight: f32,
 	directory: &Path,
 	recursive: bool,
 	limit: usize,
 	min_score: f32,
-	open: bool,
+	open_result: bool,
 	include_ref: bool,
 ) -> Result<()> {
 	if query.is_none() && image.is_none() {
-		log(Level::Error, "Must provide a text query or --image (or both)");
+		log(Level::Error, "Must provide text query or --image (or both)");
 		std::process::exit(1);
 	}
 
-	println!();
-	println!(
-		"{}",
-		format!("─── Scout v{} ───", env!("CARGO_PKG_VERSION"))
-			.bright_blue()
-			.bold()
-	);
+	print_header();
 
 	let root = directory.canonicalize().unwrap_or_else(|_| directory.to_path_buf());
+	let weight = CombineWeight::new(weight).unwrap();
 
-	// Build search description
 	let search_desc = match (&query, &image) {
 		(Some(q), Some(img)) => {
 			let name = img.file_name().map(|n| n.to_string_lossy()).unwrap_or_else(|| img.to_string_lossy());
-			format!("\"{}\" + {} ({:.0}% text)", q.bright_blue(), name.yellow(), weight * 100.0)
+			format!("\"{}\" + {} ({:.0}% text)", q.bright_blue(), name.yellow(), weight.value() * 100.0)
 		}
 		(Some(q), None) => format!("{}", q.bright_blue()),
 		(None, Some(img)) => {
@@ -198,17 +186,18 @@ fn run_search(
 		}
 		(None, None) => unreachable!(),
 	};
+
 	log(Level::Info, &format!("Searching: {}", search_desc));
 
 	let search_query = match (&query, &image) {
-		(Some(q), Some(img)) => SearchQuery::combined(q, img, weight),
-		(Some(q), None) => SearchQuery::text_only(q),
-		(None, Some(img)) => SearchQuery::image_only(img),
+		(Some(q), Some(img)) => SearchQuery::Combined { text: q, image: img, weight },
+		(Some(q), None) => SearchQuery::Text(q),
+		(None, Some(img)) => SearchQuery::Image(img),
 		(None, None) => unreachable!(),
 	};
 
-	let exclude_path = if include_ref { None } else { image.map(|p| p.as_path()) };
-	let results = search_with_query(&root, search_query, min_score, exclude_path, recursive);
+	let exclude = if include_ref { None } else { image };
+	let results = search(&root, search_query, min_score, exclude, recursive);
 
 	if results.is_empty() {
 		log(Level::Warning, "No matches found");
@@ -219,11 +208,10 @@ fn run_search(
 	println!();
 
 	for (i, result) in results.iter().take(limit).enumerate() {
-		let name = result
-			.path
+		let name = result.path
 			.file_name()
-			.map(|n| n.to_string_lossy().to_string())
-			.unwrap_or_else(|| result.path.to_string_lossy().to_string());
+			.and_then(|n| n.to_str())
+			.unwrap_or("unknown");
 
 		let score_pct = format!("{:.0}%", result.score * 100.0);
 		let score_colored = if result.score >= 0.15 {
@@ -243,7 +231,7 @@ fn run_search(
 		println!("      {}", result.path.to_string_lossy().dimmed());
 	}
 
-	if open && !results.is_empty() {
+	if open_result && !results.is_empty() {
 		let best = &results[0].path;
 		log(Level::Info, &format!("Opening: {}", best.to_string_lossy()));
 		if let Err(e) = open::that(best) {
@@ -255,7 +243,7 @@ fn run_search(
 	Ok(())
 }
 
-fn process_images(images: &[ImageEntry], encoder: &VisionEncoder) -> (usize, usize) {
+fn process_images(images: &[scanner::ImageEntry], models: &mut ModelManager) -> (usize, usize) {
 	let total = images.len();
 	let mut processed = 0;
 	let mut errors = 0;
@@ -264,31 +252,27 @@ fn process_images(images: &[ImageEntry], encoder: &VisionEncoder) -> (usize, usi
 	println!("{}", "─── Processing ───".bright_blue().bold());
 
 	for (index, entry) in images.iter().enumerate() {
-		let name = &entry.filename;
-		let display = truncate(&entry.path.to_string_lossy(), 50);
 		let queue = format!("[{}/{}]", index + 1, total).bright_blue().bold();
 
-		match encoder.process_image(&entry.path) {
-			Ok(proc_result) => {
-				let sidecar = ImageSidecar::new(
-					&entry.filename,
-					proc_result.image_hash,
-					proc_result.embedding,
-					proc_result.processing_ms,
-				);
+		let start = Instant::now();
+		match models.encode_image(&entry.path) {
+			Ok((embedding, hash)) => {
+				let processing_ms = start.elapsed().as_millis() as u64;
+				let sidecar = ImageSidecar::new(&entry.filename, hash, embedding, processing_ms);
 
 				if let Err(e) = sidecar.save(&entry.sidecar_path) {
-					log(Level::Error, &format!("{} {}: {}", queue, name, e));
+					log(Level::Error, &format!("{} {}: {}", queue, entry.filename, e));
 					errors += 1;
 					continue;
 				}
 
-				let timing = format!("{}ms", proc_result.processing_ms).dimmed();
-				log(Level::Success, &format!("{} {} {}", queue, display, timing));
+				let timing = format!("{}ms", processing_ms).dimmed();
+				let link = logger::hyperlink(&entry.filename, &entry.path);
+				log(Level::Success, &format!("{} {} {}", queue, link, timing));
 				processed += 1;
 			}
 			Err(e) => {
-				log(Level::Error, &format!("{} {}: {}", queue, name, e));
+				log(Level::Error, &format!("{} {}: {}", queue, entry.filename, e));
 				errors += 1;
 			}
 		}
@@ -297,10 +281,12 @@ fn process_images(images: &[ImageEntry], encoder: &VisionEncoder) -> (usize, usi
 	(processed, errors)
 }
 
-fn truncate(s: &str, max: usize) -> String {
-	if s.len() > max {
-		format!("...{}", &s[s.len() - max + 3..])
-	} else {
-		s.to_string()
-	}
+fn print_header() {
+	println!();
+	println!(
+		"{}",
+		format!("─── Scout v{} ───", env!("CARGO_PKG_VERSION"))
+			.bright_blue()
+			.bold()
+	);
 }

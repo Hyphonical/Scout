@@ -1,0 +1,3 @@
+https://huggingface.co/onnx-community/siglip2-large-patch16-512-ONNX/resolve/main/tokenizer.json
+https://huggingface.co/onnx-community/siglip2-large-patch16-512-ONNX/resolve/main/onnx/vision_model_q4f16.onnx
+https://huggingface.co/onnx-community/siglip2-large-patch16-512-ONNX/resolve/main/onnx/text_model_q4f16.onnx
