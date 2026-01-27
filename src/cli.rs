@@ -46,7 +46,7 @@ fn styles() -> Styles {
   {scout} {search}  {search_args}                   {search_desc}
   {scout} {search}  {search_img_args}      {search_img_desc}
   {scout} {help}    {help_args}                           {help_desc}
-  {scout} {live}    {live_args}                   {live_desc},
+  {scout} {live}    {live_args}                   {live_desc}
   {scout} {clean}   {clean_args}                {clean_desc}",
 		title = "Examples:".bright_blue().bold(),
 		scout = "scout".bright_blue(),
