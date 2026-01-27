@@ -6,17 +6,17 @@ use std::process::Command;
 
 #[test]
 fn test_scan_basic() {
-    // This test runs against the test_images folder created by CI
-    let test_dir = Path::new("test_images");
+    // This test runs against the demo folder created by CI
+    let test_dir = Path::new("demo");
     
     if !test_dir.exists() {
         // Skip if not in CI environment
-        eprintln!("Skipping test: test_images directory not found");
+        eprintln!("Skipping test: demo directory not found");
         return;
     }
 
     let output = Command::new("cargo")
-        .args(&["run", "--release", "--", "scan", "-d", "test_images"])
+        .args(&["run", "--release", "--", "scan", "-d", "demo"])
         .output()
         .expect("Failed to run scout scan");
 
@@ -59,16 +59,16 @@ fn test_help_display() {
 
 #[test]
 fn test_sidecar_creation() {
-    let test_dir = Path::new("test_images");
+    let test_dir = Path::new("demo");
     
     if !test_dir.exists() {
-        eprintln!("Skipping test: test_images directory not found");
+        eprintln!("Skipping test: demo directory not found");
         return;
     }
 
     // Run scan
     let output = Command::new("cargo")
-        .args(&["run", "--release", "--", "scan", "-d", "test_images"])
+        .args(&["run", "--release", "--", "scan", "-d", "demo"])
         .output()
         .expect("Failed to run scout scan");
 
