@@ -1,0 +1,88 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Triggers on version tags like v0.1.0, v1.2.3, etc.
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  create-release:
+    name: 📝 Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    steps:
+      - name: 📝 Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Scout ${{ github.ref }}
+          draft: false
+          prerelease: false
+
+  build-release:
+    name: 🚀 Build Release (${{ matrix.target }})
+    needs: create-release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            name: scout-linux-x64
+            asset_name: scout-linux-x64.tar.gz
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            name: scout-macos-x64
+            asset_name: scout-macos-x64.tar.gz
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            name: scout-macos-arm64
+            asset_name: scout-macos-arm64.tar.gz
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            name: scout-windows-x64
+            asset_name: scout-windows-x64.zip
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v6
+
+      - name: 🦀 Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: 🚧 Build Release Binary
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: 📦 Package Binary (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          cd target/${{ matrix.target }}/release
+          tar czf ${{ github.workspace }}/${{ matrix.asset_name }} scout
+        shell: bash
+
+      - name: 📦 Package Binary (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          cd target/${{ matrix.target }}/release
+          7z a ${{ github.workspace }}/${{ matrix.asset_name }} scout.exe
+        shell: pwsh
+
+      - name: 📤 Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./${{ matrix.asset_name }}
+          asset_name: ${{ matrix.asset_name }}
+          asset_content_type: application/octet-stream
