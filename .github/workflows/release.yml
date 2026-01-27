@@ -8,27 +8,12 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
-jobs:
-  create-release:
-    name: 📝 Create Release
-    runs-on: ubuntu-latest
-    outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
-    steps:
-      - name: 📝 Create GitHub Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: Scout ${{ github.ref }}
-          draft: false
-          prerelease: false
+permissions:
+  contents: write
 
+jobs:
   build-release:
     name: 🚀 Build Release (${{ matrix.target }})
-    needs: create-release
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -78,11 +63,9 @@ jobs:
         shell: pwsh
 
       - name: 📤 Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v2
         with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./${{ matrix.asset_name }}
-          asset_name: ${{ matrix.asset_name }}
-          asset_content_type: application/octet-stream
+          files: ${{ matrix.asset_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
