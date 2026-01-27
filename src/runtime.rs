@@ -24,6 +24,11 @@ fn register_execution_providers(builder: &mut SessionBuilder) {
 		Provider::Cpu => {
 			log(Level::Info, "Using CPU execution provider");
 		}
+		Provider::Xnnpack => {
+			if !try_register_xnnpack(builder) {
+				log(Level::Error, "XNNPACK requested but unavailable, falling back to CPU");
+			}
+		}
 		Provider::Cuda => {
 			if !try_register_cuda(builder) {
 				log(Level::Error, "CUDA requested but unavailable, falling back to CPU");
@@ -49,7 +54,29 @@ fn register_execution_providers(builder: &mut SessionBuilder) {
 			if try_register_coreml(builder) {
 				return;
 			}
+			if try_register_xnnpack(builder) {
+				return;
+			}
 			log(Level::Info, "Using CPU execution provider");
+		}
+	}
+}
+
+fn try_register_xnnpack(builder: &mut SessionBuilder) -> bool {
+	use ort::ep::{ExecutionProvider, XNNPACK};
+	let xnnpack = XNNPACK::default();
+	if !xnnpack.is_available().unwrap_or(false) {
+		log(Level::Debug, "XNNPACK not available");
+		return false;
+	}
+	match xnnpack.register(builder) {
+		Ok(_) => {
+			log(Level::Success, "Using XNNPACK execution provider");
+			true
+		}
+		Err(e) => {
+			log(Level::Warning, &format!("XNNPACK registration failed: {}", e));
+			false
 		}
 	}
 }

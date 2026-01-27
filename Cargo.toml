@@ -1,6 +1,6 @@
 [package]
 name = "scout"
-version = "0.7.0"
+version = "0.8.0"
 edition = "2021"
 description = "AI-powered semantic image search"
 
@@ -23,9 +23,9 @@ walkdir = "2.5"
 # ONNX Runtime - base dependency
 [dependencies.ort]
 version = "2.0.0-rc.11"
-features = ["cuda", "tensorrt"]
+features = ["tensorrt", "cuda", "xnnpack"]
 
 # macOS: Add CoreML support
 [target.'cfg(target_os = "macos")'.dependencies.ort]
 version = "2.0.0-rc.11"
-features = ["cuda", "tensorrt", "coreml"]
+features = ["tensorrt", "cuda", "coreml", "xnnpack"]

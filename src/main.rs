@@ -86,6 +86,10 @@ fn main() -> Result<()> {
 			}
 			Ok(())
 		}
+
+		Command::Clean { directory, recursive, auto_confirm } => {
+			run_clean(&directory, recursive, auto_confirm)
+		}
 	}
 }
 
@@ -213,22 +217,11 @@ fn run_search(
 			.and_then(|n| n.to_str())
 			.unwrap_or("unknown");
 
-		let score_pct = format!("{:.0}%", result.score * 100.0);
-		let score_colored = if result.score >= 0.15 {
-			score_pct.bright_blue()
-		} else if result.score >= 0.08 {
-			score_pct.yellow()
-		} else {
-			score_pct.dimmed()
-		};
+		let score_pct = format!("{:.0}%", result.score * 100.0).dimmed();
+		let rank = format!("#{}", i + 1).bright_blue().bold();
+		let link = logger::hyperlink(name, &result.path);
 
-		println!(
-			"  {} {} {}",
-			format!("#{}", i + 1).bright_blue().bold(),
-			score_colored,
-			name.white()
-		);
-		println!("      {}", result.path.to_string_lossy().dimmed());
+		println!("  {} {} {}", rank, link, score_pct);
 	}
 
 	if open_result && !results.is_empty() {
@@ -272,13 +265,77 @@ fn process_images(images: &[scanner::ImageEntry], models: &mut ModelManager) -> 
 				processed += 1;
 			}
 			Err(e) => {
-				log(Level::Error, &format!("{} {}: {}", queue, entry.filename, e));
+				let link = logger::hyperlink(&entry.filename, &entry.path);
+				log(Level::Error, &format!("{} {}: {}", queue, link, e));
 				errors += 1;
 			}
 		}
 	}
 
 	(processed, errors)
+}
+
+fn run_clean(directory: &Path, recursive: bool, auto_confirm: bool) -> Result<()> {
+	use std::io::{self, Write};
+
+	print_header();
+	log(Level::Info, "Scanning for orphaned sidecars...");
+
+	let root = directory.canonicalize().unwrap_or_else(|_| directory.to_path_buf());
+	let mut orphaned = Vec::new();
+
+	for (sidecar_path, base_dir) in sidecar::iter_sidecars(&root, recursive) {
+		if let Ok(sidecar) = sidecar::ImageSidecar::load(&sidecar_path) {
+			let image_path = base_dir.join(&sidecar.filename);
+			if !image_path.exists() {
+				orphaned.push((sidecar_path, image_path));
+			}
+		}
+	}
+
+	if orphaned.is_empty() {
+		log(Level::Success, "No orphaned sidecars found");
+		return Ok(());
+	}
+
+	log(Level::Warning, &format!("Found {} orphaned sidecars", orphaned.len()));
+
+	for (_, missing) in &orphaned {
+		log(Level::Error, &missing.display().to_string().dimmed().to_string());
+	}
+
+	if !auto_confirm {
+		print!("\nDelete these sidecars? [y/N]: ");
+		io::stdout().flush()?;
+
+		let mut input = String::new();
+		io::stdin().read_line(&mut input)?;
+
+		if !input.trim().eq_ignore_ascii_case("y") {
+			log(Level::Info, "Cancelled");
+			return Ok(());
+		}
+	}
+
+	let mut deleted = 0;
+	let mut errors = 0;
+
+	for (sidecar_path, _) in orphaned {
+		match std::fs::remove_file(&sidecar_path) {
+			Ok(_) => deleted += 1,
+			Err(e) => {
+				log(Level::Error, &format!("Failed to delete {}: {}", sidecar_path.display(), e));
+				errors += 1;
+			}
+		}
+	}
+
+	log(Level::Success, &format!("Deleted {} orphaned sidecars", deleted));
+	if errors > 0 {
+		log(Level::Warning, &format!("{} errors", errors));
+	}
+
+	Ok(())
 }
 
 fn print_header() {

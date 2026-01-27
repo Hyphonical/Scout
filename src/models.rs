@@ -158,10 +158,10 @@ fn preprocess_image(path: &Path) -> Result<Array<f32, IxDyn>> {
 	use image::{imageops::FilterType, ImageReader};
 
 	let img = ImageReader::open(path)
-		.with_context(|| format!("Failed to open: {}", path.display()))?
+		.with_context(|| "Failed to open")?
 		.with_guessed_format()?
 		.decode()
-		.with_context(|| format!("Failed to decode: {}", path.display()))?;
+		.with_context(|| "Failed to decode")?;
 
 	let resized = img.resize_exact(INPUT_SIZE, INPUT_SIZE, FilterType::CatmullRom);
 	let rgb = resized.to_rgb8();

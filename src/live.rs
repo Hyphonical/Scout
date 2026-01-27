@@ -179,12 +179,16 @@ pub fn run(directory: &Path, recursive: bool) -> Result<()> {
 							app.query.pop();
 							last_input = Instant::now();
 						}
-						KeyCode::Enter => {
-							app.search();
-							last_query = app.query.clone();
-						}
 						KeyCode::Down | KeyCode::Tab => app.select_next(),
 						KeyCode::Up | KeyCode::BackTab => app.select_prev(),
+						KeyCode::Enter => {
+							if !app.results.is_empty() && app.selected < app.results.len() {
+								let path = &app.results[app.selected].0;
+								if let Err(e) = open::that(path) {
+									app.status = format!("Failed to open: {}", e);
+								}
+							}
+						},
 						_ => {}
 					}
 				}
@@ -219,8 +223,8 @@ fn draw(f: &mut ratatui::Frame, app: &mut App) {
 	let search_line = if app.query.is_empty() {
 		Line::from(vec![
 			Span::styled(" 🔍 ", Style::default()),
-			Span::styled("Type to search...", Style::default().fg(Color::DarkGray)),
 			Span::styled(cursor, Style::default().fg(Color::Cyan)),
+			Span::styled("Type to search...", Style::default().fg(Color::DarkGray)),
 		])
 	} else {
 		Line::from(vec![

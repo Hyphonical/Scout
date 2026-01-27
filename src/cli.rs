@@ -7,6 +7,7 @@ pub enum Provider {
 	#[default]
 	Auto,
 	Cpu,
+	Xnnpack,
 	Cuda,
 	Tensorrt,
 	Coreml,
@@ -41,11 +42,12 @@ fn styles() -> Styles {
 	disable_help_subcommand = true,
 	after_help = format!(
 		"{title}
-  {scout} {scan}    {scan_args}   {scan_desc}
-  {scout} {search}  {search_args}      {search_desc}
+  {scout} {scan}    {scan_args}                {scan_desc}
+  {scout} {search}  {search_args}                   {search_desc}
   {scout} {search}  {search_img_args}      {search_img_desc}
-  {scout} {help}    {help_args}              {help_desc}
-  {scout} {live}    {live_args}      {live_desc}",
+  {scout} {help}    {help_args}                           {help_desc}
+  {scout} {live}    {live_args}                   {live_desc},
+  {scout} {clean}   {clean_args}                {clean_desc}",
 		title = "Examples:".bright_blue().bold(),
 		scout = "scout".bright_blue(),
 		scan = "scan".yellow(),
@@ -62,6 +64,9 @@ fn styles() -> Styles {
 		live = "live".yellow(),
 		live_args = "-d ./images/",
 		live_desc = "Live search in terminal".dimmed(),
+		clean = "clean".yellow(),
+		clean_args = "-d ./images/ -r",
+		clean_desc = "Remove unindexed images".dimmed()
 	),
 )]
 pub struct Cli {
@@ -142,5 +147,16 @@ pub enum Command {
 
 	Help {
 		subcommand: Option<String>,
+	},
+
+	Clean {
+		#[arg(short = 'd', long = "dir", default_value = ".")]
+		directory: PathBuf,
+
+		#[arg(short = 'r', long = "recursive")]
+		recursive: bool,
+
+		#[arg(short = 'y', long = "yes", help = "Skip confirmation")]
+		auto_confirm: bool,
 	},
 }
