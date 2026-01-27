@@ -1,5 +1,4 @@
 /target
 /demo
-README.md
 **/*.onnx
 **/tokenizer.json
