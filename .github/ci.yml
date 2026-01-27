@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: 🚧 Build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+    - name: 📥 Checkout
+      uses: actions/checkout@v6
+    - name: 🦀 Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+    - name: 🚧 Build
+      run: cargo build --release
+
+  test:
+    name: 🧪 Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+    - name: 📥 Checkout
+      uses: actions/checkout@v6
+    - name: 🦀 Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+    - name: 🧪 Test
+      run: cargo test --all-features --release
+
+  lints:
+    name: 🔍 Lints
+    runs-on: ubuntu-latest
+    steps:
+    - name: 📥 Checkout
+      uses: actions/checkout@v6
+    - name: 🦀 Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: rustfmt, clippy
+    - name: 🧶 Rust FMT
+      run: cargo fmt --all -- --check
+    - name: 📎 Clippy
+      run: cargo clippy --all --all-features -- -D warnings

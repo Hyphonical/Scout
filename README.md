@@ -246,9 +246,9 @@ This is a weekend project that got slightly out of hand. If you find bugs or hav
 Things I'd love help with:
 - Better test coverage
 - More export formats (JSON, CSV, HTML gallery)
-- TUI image previews with ratatui-image
 - Automatic binary releases
-- Automatic model downloads
+- Performance optimizations (workflow)
+- Video support (extract N amount of frames and index them)
 
 ## License
 
@@ -256,4 +256,4 @@ MIT - do whatever you want with it. If you build something cool on top of this, 
 
 ---
 
-Made with ☕ and questionable life choices (It's Rust, what did you expect?). If you have 10,000 photos named `IMG_XXXX.jpg`, this is for you.
+Made with ☕ and questionable life choices (It's Rust and ONNX, what did you expect?). If you have 10,000 photos named `IMG_XXXX.jpg`, this is for you.
