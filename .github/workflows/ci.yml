@@ -78,10 +78,11 @@ jobs:
       - name: 🔨 Build ONNX Runtime from Source (macOS x64)
         if: matrix.target == 'x86_64-apple-darwin'
         run: |
-          git clone --recursive --depth 1 --branch v1.21.0 https://github.com/microsoft/onnxruntime.git
+          git clone --recursive --depth 1 https://github.com/microsoft/onnxruntime.git
           cd onnxruntime
-          ./build.sh --config Release --parallel --skip_tests --cmake_extra_defines CMAKE_OSX_ARCHITECTURES=x86_64
+          ./build.sh --config Release --parallel --skip_tests --cmake_extra_defines CMAKE_OSX_ARCHITECTURES=x86_64 --cmake_extra_defines FETCHCONTENT_FULLY_DISCONNECTED=OFF
         shell: bash
+
 
       - name: 🚧 Build Release Binary (macOS x64)
         if: matrix.target == 'x86_64-apple-darwin'
