@@ -30,11 +30,11 @@ impl VisionModel {
 
 		let embedding_data = if let Some(pooler) = outputs.get("pooler_output") {
 			let (shape, data) = pooler.try_extract_tensor::<f32>()?;
-			extract_embedding(data, &shape)
+			extract_embedding(data, shape.to_vec())
 		} else {
 			let (_, pooler) = outputs.iter().nth(1).context("No pooler_output in vision model")?;
 			let (shape, data) = pooler.try_extract_tensor::<f32>()?;
-			extract_embedding(data, &shape)
+			extract_embedding(data, shape.to_vec())
 		};
 
 		Ok(Embedding::new(embedding_data))
@@ -74,11 +74,11 @@ impl TextModel {
 
 		let embedding_data = if let Some(pooler) = outputs.get("pooler_output") {
 			let (shape, data) = pooler.try_extract_tensor::<f32>()?;
-			extract_embedding(data, &shape)
+			extract_embedding(data, shape.to_vec())
 		} else {
 			let (_, pooler) = outputs.iter().nth(1).context("No pooler_output in text model")?;
 			let (shape, data) = pooler.try_extract_tensor::<f32>()?;
-			extract_embedding(data, &shape)
+			extract_embedding(data, shape.to_vec())
 		};
 
 		Ok(Embedding::new(embedding_data))
@@ -133,7 +133,7 @@ impl ModelManager {
 	}
 }
 
-fn extract_embedding(data: &[f32], shape: &[i64]) -> Vec<f32> {
+fn extract_embedding(data: &[f32], shape: Vec<i64>) -> Vec<f32> {
 	let dims: Vec<usize> = shape.iter().map(|&x| x as usize).collect();
 
 	match dims.as_slice() {

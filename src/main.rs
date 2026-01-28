@@ -157,6 +157,7 @@ fn run_scan(directory: &Path, recursive: bool, force: bool, filters: &ScanFilter
 	Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_search(
 	query: Option<&str>,
 	image: Option<&Path>,

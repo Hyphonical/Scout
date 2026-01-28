@@ -75,8 +75,20 @@ jobs:
             target/
           key: ${{ runner.os }}-${{ matrix.target }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
 
+      - name: 🔨 Build ONNX Runtime from Source (macOS x64)
+        if: matrix.target == 'x86_64-apple-darwin'
+        run: |
+          git clone --recursive --depth 1 --branch v1.21.0 https://github.com/microsoft/onnxruntime.git
+          cd onnxruntime
+          ./build.sh --config Release --parallel --skip_tests --cmake_extra_defines CMAKE_OSX_ARCHITECTURES=x86_64
+        shell: bash
+
       - name: 🚧 Build Release Binary
         run: cargo build --release --target ${{ matrix.target }}
+        env:
+          ORT_STRATEGY: ${{ matrix.target == 'x86_64-apple-darwin' && 'system' || '' }}
+          ORT_LIB_LOCATION: ${{ matrix.target == 'x86_64-apple-darwin' && format('{0}/onnxruntime/build/MacOS/Release', github.workspace) || '' }}
+          ORT_USE_STATIC_LIBS: ${{ matrix.target == 'x86_64-apple-darwin' && 'true' || '' }}
 
       - name: 📦 Package Binary (Unix)
         if: matrix.os != 'windows-latest'
