@@ -45,19 +45,23 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            name: scout-linux-x64
+            artifact: scout-linux-x64.tar.gz
+
           - os: macos-latest
             target: x86_64-apple-darwin
-            name: scout-macos-x64
+            artifact: scout-macos-x64.tar.gz
+
           - os: macos-latest
             target: aarch64-apple-darwin
-            name: scout-macos-arm64
+            artifact: scout-macos-arm64.tar.gz
+
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            name: scout-windows-x64
+            artifact: scout-windows-x64.zip
+
     steps:
       - name: 📥 Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: 🦀 Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -75,15 +79,24 @@ jobs:
             target/
           key: ${{ runner.os }}-${{ matrix.target }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
 
+      - name: 🍬 Install Wrappe
+        run: cargo install wrappe
+
+      # --- macOS x64 ONNX Runtime build ---
       - name: 🔨 Build ONNX Runtime from Source (macOS x64)
         if: matrix.target == 'x86_64-apple-darwin'
         run: |
           git clone --recursive --depth 1 https://github.com/microsoft/onnxruntime.git
           cd onnxruntime
-          ./build.sh --config Release --parallel --skip_tests --cmake_extra_defines CMAKE_OSX_ARCHITECTURES=x86_64 --cmake_extra_defines FETCHCONTENT_FULLY_DISCONNECTED=OFF
+          ./build.sh \
+            --config Release \
+            --parallel \
+            --skip_tests \
+            --cmake_extra_defines CMAKE_OSX_ARCHITECTURES=x86_64 \
+            --cmake_extra_defines FETCHCONTENT_FULLY_DISCONNECTED=OFF
         shell: bash
 
-
+      # --- Build ---
       - name: 🚧 Build Release Binary (macOS x64)
         if: matrix.target == 'x86_64-apple-darwin'
         run: cargo build --release --target ${{ matrix.target }}
@@ -96,46 +109,41 @@ jobs:
         if: matrix.target != 'x86_64-apple-darwin'
         run: cargo build --release --target ${{ matrix.target }}
 
-      - name: 📦 Compress Binary with UPX (Windows)
-        if: matrix.target == 'x86_64-pc-windows-msvc'
-        uses: crazy-max/ghaction-upx@v3
-        with:
-          version: latest
-          files: |
-            ./target/${{ matrix.target }}/release/scout.exe
-          args: -9 -q
-
-      - name: 📦 Compress Binary with UPX (Linux)
-        if: matrix.target == 'x86_64-unknown-linux-gnu'
-        uses: crazy-max/ghaction-upx@v3
-        with:
-          version: latest
-          files: |
-            ./target/${{ matrix.target }}/release/scout
-          args: -9 -q
-
-      - name: 📦 Package Binary (Unix)
-        if: matrix.os != 'windows-latest'
+      # --- Wrappe ---
+      - name: 🔩 Wrap Binary with Wrappe
         run: |
-          cd target/${{ matrix.target }}/release
-          tar czf ${{ matrix.name }}.tar.gz scout
-          mv ${{ matrix.name }}.tar.gz ${{ github.workspace }}/
+          BIN=target/${{ matrix.target }}/release/scout
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            BIN="$BIN.exe"
+          fi
+          wrappe -c 22 "$BIN"
         shell: bash
 
-      - name: 📦 Package Binary (Windows)
+      # --- Package ---
+      - name: 📦 Package Artifact (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          mkdir dist
+          cp target/${{ matrix.target }}/release/scout dist/
+          cp LICENSE README.md dist/
+          tar czf ${{ matrix.artifact }} -C dist .
+        shell: bash
+
+      - name: 📦 Package Artifact (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          cd target/${{ matrix.target }}/release
-          7z a ${{ matrix.name }}.zip scout.exe
-          move ${{ matrix.name }}.zip ${{ github.workspace }}/
+          mkdir dist
+          copy target\${{ matrix.target }}\release\scout.exe dist\
+          copy LICENSE dist\
+          copy README.md dist\
+          7z a ${{ matrix.artifact }} .\dist\*
         shell: pwsh
 
+      # --- Upload  ---
       - name: 📤 Upload Artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.name }}
-          path: |
-            ${{ matrix.name }}.tar.gz
-            ${{ matrix.name }}.zip
-          retention-days: 7
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
           if-no-files-found: error
+          retention-days: 7
