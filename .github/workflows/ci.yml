@@ -132,7 +132,9 @@ jobs:
           mkdir dist
           cp target/${{ matrix.target }}/release/scout dist/
           cp LICENSE README.md dist/
-          tar czf ${{ matrix.artifact }} -C dist .
+          cd dist
+          tar czf ${{ matrix.artifact }} *
+          cd ..
         shell: bash
 
       - name: 📦 Package Artifact (Windows)
@@ -142,7 +144,9 @@ jobs:
           copy target\${{ matrix.target }}\release\scout.exe dist\
           copy LICENSE dist\
           copy README.md dist\
-          7z a ${{ matrix.artifact }} .\dist\*
+          cd dist
+          7z a -mx=9 ${{ matrix.artifact }} *
+          cd ..
         shell: pwsh
 
       # --- Upload  ---
