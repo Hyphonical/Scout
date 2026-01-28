@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 📥 Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: 🦀 Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -23,7 +23,7 @@ jobs:
           components: clippy
 
       - name: 📦 Cache Cargo
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/bin/
@@ -61,7 +61,7 @@ jobs:
 
     steps:
       - name: 📥 Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: 🦀 Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -78,9 +78,6 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ runner.os }}-${{ matrix.target }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: 🍬 Install Wrappe
-        run: cargo install wrappe
 
       # --- macOS x64 ONNX Runtime build ---
       - name: 🔨 Build ONNX Runtime from Source (macOS x64)
@@ -109,17 +106,24 @@ jobs:
         if: matrix.target != 'x86_64-apple-darwin'
         run: cargo build --release --target ${{ matrix.target }}
 
-      # --- Wrappe ---
-      - name: 🔩 Wrap Binary with Wrappe
-        run: |
-          BIN=target/${{ matrix.target }}/release/scout
-          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            BIN="$BIN.exe"
-          fi
+      # --- UPX ---
+      - name: 🔩 Compress Binary with UPX (Windows)
+        if: matrix.target == 'x86_64-pc-windows-msvc'
+        uses: crazy-max/ghaction-upx@v3
+        with:
+          version: latest
+          files: |
+            ./target/${{ matrix.target }}/release/scout.exe
+          args: -9 -q --lzma
 
-          wrappe --compression 22 "$BIN" '$0' "$BIN.wrapped"
-          mv "$BIN.wrapped" "$BIN"
-        shell: bash
+      - name: 🔩 Compress Binary with UPX (Linux)
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        uses: crazy-max/ghaction-upx@v3
+        with:
+          version: latest
+          files: |
+            ./target/${{ matrix.target }}/release/scout
+          args: -9 -q --lzma
 
       # --- Package ---
       - name: 📦 Package Artifact (Unix)
