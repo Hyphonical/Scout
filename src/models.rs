@@ -1,7 +1,7 @@
 // Models - Centralized ONNX model management
 
 use anyhow::{Context, Result};
-use ndarray::{Array, Array2, IxDyn};
+use ndarray::{Array, IxDyn};
 use ort::{session::Session, value::Value};
 use std::path::Path;
 use tokenizers::Tokenizer;
@@ -25,7 +25,9 @@ impl VisionModel {
 
 	pub fn encode(&mut self, pixels: Array<f32, IxDyn>) -> Result<Embedding> {
 		log(Level::Debug, "Running vision inference");
-		let input = Value::from_array(pixels)?;
+		let shape = pixels.shape().to_vec();
+		let data = pixels.into_raw_vec_and_offset().0;
+		let input = Value::from_array((shape, data))?;
 		let outputs = self.session.run(ort::inputs!["pixel_values" => input])?;
 
 		let embedding_data = if let Some(pooler) = outputs.get("pooler_output") {
@@ -67,8 +69,8 @@ impl TextModel {
 			.map_err(|e| anyhow::anyhow!("Tokenization failed: {}", e))?;
 
 		let input_ids: Vec<i64> = encoding.get_ids().iter().map(|&x| x as i64).collect();
-		let input = Array2::from_shape_vec((1, input_ids.len()), input_ids)?;
-		let input_val = Value::from_array(input)?;
+		let shape = vec![1, input_ids.len()];
+		let input_val = Value::from_array((shape, input_ids))?;
 
 		let outputs = self.session.run(ort::inputs!["input_ids" => input_val])?;
 
