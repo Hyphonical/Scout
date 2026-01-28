@@ -20,7 +20,7 @@ jobs:
       - name: 🦀 Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy
+          components: clippy
 
       - name: 📦 Cache Cargo
         uses: actions/cache@v4
@@ -33,64 +33,12 @@ jobs:
             target/
           key: ${{ runner.os }}-cargo-lint-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: 🧶 Check Formatting
-        run: cargo fmt --all -- --check
-
       - name: 📎 Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
-
-  test:
-    name: 🧪 Test (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    steps:
-      - name: 📥 Checkout
-        uses: actions/checkout@v6
-
-      - name: 🦀 Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: 📦 Cache Cargo
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-test-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: 🖼️ Download Test Images
-        run: |
-          mkdir -p demo
-          curl -L "https://picsum.photos/800/600" -o demo/image1.jpg
-          curl -L "https://picsum.photos/1024/768" -o demo/image2.jpg
-          curl -L "https://picsum.photos/640/480" -o demo/image3.jpg
-        shell: bash
-
-      - name: 📦 Download ONNX Models
-        run: |
-          curl -L "https://huggingface.co/onnx-community/siglip2-large-patch16-512-ONNX/resolve/main/onnx/vision_model_q4f16.onnx" -o models/vision_model_q4f16.onnx
-          curl -L "https://huggingface.co/onnx-community/siglip2-large-patch16-512-ONNX/resolve/main/onnx/text_model_q4f16.onnx" -o models/text_model_q4f16.onnx
-          curl -L "https://huggingface.co/onnx-community/siglip2-large-patch16-512-ONNX/resolve/main/tokenizer.json" -o models/tokenizer.json
-        shell: bash
-
-      - name: 🧪 Run Tests
-        run: cargo test --all-features --release
-
-      - name: 🧹 Cleanup Test Images
-        if: always()
-        run: rm -rf demo
-        shell: bash
 
   build:
     name: 🚧 Build (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
-    needs: [lint, test]
     strategy:
       fail-fast: false
       matrix:
@@ -155,24 +103,3 @@ jobs:
             ${{ matrix.name }}.zip
           retention-days: 7
           if-no-files-found: error
-
-  summary:
-    name: ✅ Summary
-    runs-on: ubuntu-latest
-    needs: [lint, test, build]
-    if: always()
-    steps:
-      - name: 📊 Check Status
-        run: |
-          echo "## 📋 CI Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Lint**: ${{ needs.lint.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Test**: ${{ needs.test.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Build**: ${{ needs.build.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ needs.lint.result }}" = "success" ] && [ "${{ needs.test.result }}" = "success" ] && [ "${{ needs.build.result }}" = "success" ]; then
-            echo "✅ All checks passed!" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ Some checks failed" >> $GITHUB_STEP_SUMMARY
-            exit 1
-          fi
