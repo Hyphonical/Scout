@@ -116,7 +116,9 @@ jobs:
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
             BIN="$BIN.exe"
           fi
-          wrappe -c 22 "$BIN"
+
+          wrappe --compression 22 "$BIN" '$0' "$BIN.wrapped"
+          mv "$BIN.wrapped" "$BIN"
         shell: bash
 
       # --- Package ---
