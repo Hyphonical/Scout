@@ -1,0 +1,84 @@
+name: Linux Build
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: 🚧 Linux x86_64
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v6
+
+      - name: 🦀 Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: 📦 Cache Cargo
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: linux-x86_64-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: 🔧 Install FFmpeg Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake nasm pkg-config
+
+      - name: 🚧 Build Image-Only
+        run: cargo build --release --target x86_64-unknown-linux-gnu
+
+      - name: 🎥 Build with Video Support
+        run: cargo build --release --target x86_64-unknown-linux-gnu --features video
+
+      - name: 🔩 Compress with UPX (Image-Only)
+        uses: crazy-max/ghaction-upx@v3
+        with:
+          version: latest
+          files: ./target/x86_64-unknown-linux-gnu/release/scout
+          args: -9 -q --lzma
+
+      - name: 📦 Package Image-Only
+        run: |
+          mkdir -p dist-image
+          cp target/x86_64-unknown-linux-gnu/release/scout dist-image/
+          cp LICENSE README.md dist-image/
+          cd dist-image
+          tar czf ../scout-linux-x64.tar.gz *
+
+      - name: 📦 Package Video Variant
+        run: |
+          mkdir -p dist-video
+          cp target/x86_64-unknown-linux-gnu/release/scout dist-video/
+          cp LICENSE README.md dist-video/
+          cd dist-video
+          tar czf ../scout-linux-x64-video.tar.gz *
+
+      - name: 📤 Upload Image-Only
+        uses: actions/upload-artifact@v4
+        with:
+          name: scout-linux-x64.tar.gz
+          path: scout-linux-x64.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: 📤 Upload Video Variant
+        uses: actions/upload-artifact@v4
+        with:
+          name: scout-linux-x64-video.tar.gz
+          path: scout-linux-x64-video.tar.gz
+          if-no-files-found: error
+          retention-days: 7

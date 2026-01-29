@@ -6,7 +6,7 @@ Scout supports two build variants to accommodate different use cases and environ
 
 The default build supports image search only and has minimal dependencies.
 
-**Use case:** Local development and testing on systems where FFmpeg compilation is impractical (e.g., Windows laptops).
+**Use case:** Local development and testing on systems where FFmpeg compilation is impractical.
 
 **Build command:**
 ```bash
@@ -22,56 +22,85 @@ cargo build --release
 
 ## 🎥 Video Build (Optional)
 
-The video build includes FFmpeg support for extracting and indexing video frames.
+The video build includes FFmpeg support for extracting and indexing video frames via rsmpeg.
 
-**Use case:** CI/CD environments (GitHub Actions) and systems with FFmpeg build tools pre-installed.
+**Use case:** CI/CD environments (GitHub Actions) and systems with FFmpeg installed or build tools available.
 
 **Build command:**
 ```bash
 cargo build --release --features video
 ```
 
+**Requirements:**
+- ✅ Rust 1.81.0+ (required by rsmpeg)
+- ✅ FFmpeg libraries (static or system)
+
 **Features:**
 - ✅ Image scanning and indexing
 - ✅ Text and image-based search  
 - ✅ Video frame extraction (10 evenly-spaced frames)
 - ✅ Video search with timestamp display
-- ⚠️ Requires FFmpeg build dependencies (see below)
 
-### FFmpeg Build Requirements
+### rsmpeg: Modern FFmpeg Bindings
 
-The video feature compiles FFmpeg from source with static linking. This requires:
+Scout uses [rsmpeg](https://github.com/larksuite/rsmpeg) for video support, which provides:
+- ✅ **Actively maintained**
+- ✅ **Windows static builds** (works out of the box)
+- ✅ **FFmpeg 7.x support** (latest stable)
+- ✅ **Flexible linking** (static, system, vcpkg)
 
-**Linux/macOS:**
-- Build essentials (`gcc`, `make`, `cmake`)
-- `nasm` or `yasm` (assembly compiler)
+### FFmpeg Build/Installation Options
+
+**Option 1: Let rsmpeg compile FFmpeg (CI/Linux/macOS)**
+
+Default behavior when building with `--features video`:
+```bash
+cargo build --release --features video
+```
+
+Requirements:
+- Build essentials: `gcc`, `make`, `cmake`
+- `nasm` or `yasm` (assembly optimizer)
 - `pkg-config`
-- `git` (for fetching FFmpeg source)
-- `sh` (shell, required by FFmpeg build system)
-- ~1-2 GB disk space for build artifacts
-- 10-30 minutes build time (depending on CPU)
+- ~10-30 minutes build time (grab a coffee!)
 
-**Windows:**
-- MSYS2 or similar Unix-like environment
-- Same tools as Linux/macOS (available via MSYS2)
-- full Visual Studio + MSYS2 toolchain
-- Not recommended for local development
-
-### Installing FFmpeg Build Dependencies
-
-**Ubuntu/Debian:**
+**Install on Ubuntu/Debian:**
 ```bash
 sudo apt-get update
-sudo apt-get install -y build-essential cmake nasm pkg-config git
+sudo apt-get install -y build-essential cmake nasm pkg-config
 ```
 
-**macOS (Homebrew):**
+**Install on macOS:**
 ```bash
-brew install cmake nasm pkg-config git
+brew install cmake nasm pkg-config
 ```
 
-**Windows:**
-Not recommended. Use GitHub Actions for video builds instead.
+**Option 2: Use system FFmpeg (fastest for development)**
+
+If you have FFmpeg 4.4+ installed:
+```bash
+# Install FFmpeg first
+# Ubuntu/Debian:
+sudo apt-get install -y libavcodec-dev libavformat-dev libavutil-dev libswscale-dev
+
+# macOS:
+brew install ffmpeg
+
+# Then build Scout
+cargo build --release --features video
+```
+
+rsmpeg will automatically detect and use system FFmpeg.
+
+**Option 3: Use vcpkg (Windows)**
+
+```bash
+vcpkg install ffmpeg:x64-windows
+cargo build --release --features video
+```
+
+**Windows Note:**
+Static FFmpeg builds work on Windows with rsmpeg. However, it's still easier to use CI for Windows builds or install FFmpeg via vcpkg/chocolatey.
 
 ## 🤖 CI/CD Builds
 
@@ -106,7 +135,6 @@ cargo run --release -- search "your query"
 Scout uses Cargo feature flags for optional functionality:
 
 - **`video`** (opt-in): Enables video support via FFmpeg
-  - Adds `ffmpeg-next` dependency
   - Compiles FFmpeg from source with static linking
   - Wraps all video code in `#[cfg(feature = "video")]`
 

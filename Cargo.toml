@@ -2,6 +2,7 @@
 name = "scout"
 version = "1.2.0"
 edition = "2021"
+rust-version = "1.81.0"
 description = "AI-powered semantic image search"
 authors = ["Hyphonical"]
 license = "MIT"
@@ -9,7 +10,7 @@ repository = "https://github.com/Hyphonical/Scout"
 
 [features]
 default = []
-video = ["ffmpeg-next"]
+video = ["rsmpeg"]
 
 [dependencies]
 # CLI
@@ -32,7 +33,7 @@ image = "0.25"
 ndarray = "0.17"
 
 # Video processing (optional)
-ffmpeg-next = { version = "8.0.0", features = ["build", "static"], optional = true }
+rsmpeg = { version = "0.18.0", optional = true }
 
 # ML/AI
 tokenizers = { version = "0.22.2", default-features = false, features = ["onig"] }

@@ -1,140 +1,186 @@
-//! Video frame extraction and processing
+//! Video frame extraction using FFmpeg via rsmpeg
 //!
-//! Extracts evenly-distributed frames from videos for semantic indexing.
-//! Only available when compiled with the "video" feature.
+//! Extracts evenly-spaced frames from video files for embedding generation.
+//! Uses rsmpeg (maintained FFmpeg bindings with Windows static build support).
 
 #![cfg(feature = "video")]
 
 use anyhow::{Context, Result};
-use image::{DynamicImage, RgbImage};
+use image::RgbImage;
+use rsmpeg::{
+	avcodec::AVCodecContext,
+	avformat::AVFormatContextInput,
+	avutil::AVFrame,
+	error::RsmpegError,
+	ffi,
+	swscale::SwsContext,
+};
+use std::ffi::CString;
 use std::path::Path;
 
-use crate::config::VIDEO_FRAMES_TO_EXTRACT;
-
-/// Extracted frame with timestamp information
-pub struct VideoFrame {
-	pub image: DynamicImage,
-	pub timestamp_secs: f64,
-}
-
-/// Extracts evenly-spaced frames from a video file
+/// Extracts N evenly-spaced frames from a video file
 ///
 /// # Arguments
-/// * `path` - Path to video file
-/// * `num_frames` - Number of frames to extract (default: VIDEO_FRAMES_TO_EXTRACT)
+/// * `video_path` - Path to the video file
+/// * `count` - Number of frames to extract
 ///
-/// Returns frames with their timestamps in seconds
-pub fn extract_frames(path: &Path, num_frames: Option<usize>) -> Result<Vec<VideoFrame>> {
-	let num_frames = num_frames.unwrap_or(VIDEO_FRAMES_TO_EXTRACT);
-	
-	ffmpeg_next::init()
-		.context("Failed to initialize FFmpeg")?;
-
-	let mut ictx = ffmpeg_next::format::input(&path)
-		.with_context(|| format!("Failed to open video: {}", path.display()))?;
-
-	let video_stream = ictx.streams()
-		.best(ffmpeg_next::media::Type::Video)
-		.context("No video stream found")?;
-	
-	let video_stream_index = video_stream.index();
-	let time_base = video_stream.time_base();
-	let duration = video_stream.duration();
-	
-	if duration <= 0 {
-		anyhow::bail!("Invalid video duration");
+/// # Returns
+/// Vector of tuples: (timestamp_seconds, RgbImage)
+pub fn extract_frames(video_path: &Path, count: usize) -> Result<Vec<(f64, RgbImage)>> {
+	if count == 0 {
+		anyhow::bail!("Frame count must be at least 1");
 	}
 
-	let mut decoder = ffmpeg_next::codec::context::Context::from_parameters(video_stream.parameters())?
-		.decoder()
-		.video()
-		.context("Failed to create video decoder")?;
+	// Open video file
+	let path_cstr = CString::new(video_path.to_string_lossy().as_ref())
+		.context("Failed to convert path to CString")?;
+	let mut input_ctx = AVFormatContextInput::open(&path_cstr)
+		.context("Failed to open video file")?;
 
-	let mut scaler = ffmpeg_next::software::scaling::Context::get(
-		decoder.format(),
-		decoder.width(),
-		decoder.height(),
-		ffmpeg_next::format::Pixel::RGB24,
-		decoder.width(),
-		decoder.height(),
-		ffmpeg_next::software::scaling::Flags::BILINEAR,
-	).context("Failed to create scaler")?;
+	// Find video stream
+	let (video_stream_idx, decoder) = input_ctx
+		.find_best_stream(ffi::AVMEDIA_TYPE_VIDEO)
+		.context("Failed to find video stream")?
+		.context("No video stream found in file")?;
+
+	let video_stream = &input_ctx.streams()[video_stream_idx];
+	let time_base = video_stream.time_base;
+
+	// Initialize decoder
+	let mut decode_ctx = AVCodecContext::new(&decoder);
+	decode_ctx
+		.apply_codecpar(&video_stream.codecpar())
+		.context("Failed to apply codec parameters")?;
+	decode_ctx.open(None).context("Failed to open decoder")?;
+
+	// Calculate frame positions
+	let duration = video_stream.duration as f64 * time_base.num as f64 / time_base.den as f64;
+	if duration <= 0.0 {
+		anyhow::bail!("Invalid video duration: {}", duration);
+	}
+
+	let interval = duration / count as f64;
+	let target_timestamps: Vec<f64> = (0..count).map(|i| (i as f64 + 0.5) * interval).collect();
 
 	let mut frames = Vec::new();
-	let frame_interval = duration / num_frames as i64;
+	let mut current_ts_idx = 0;
 
-	for i in 0..num_frames {
-		let target_pts = i as i64 * frame_interval;
-		let timestamp = ffmpeg_next::rescale::TIME_BASE.rescale(target_pts, time_base);
-		
-		ictx.seek(timestamp, ..timestamp)
-			.context("Failed to seek in video")?;
+	// Read and decode packets
+	while let Some(packet) = input_ctx.read_packet()? {
+		if packet.stream_index != video_stream_idx as i32 {
+			continue;
+		}
 
-		let mut decoded = ffmpeg_next::util::frame::video::Video::empty();
-		let mut found = false;
+		// Send packet to decoder
+		decode_ctx.send_packet(Some(&packet))?;
 
-		for (stream, packet) in ictx.packets() {
-			if stream.index() == video_stream_index {
-				decoder.send_packet(&packet)?;
-				
-				while decoder.receive_frame(&mut decoded).is_ok() {
-					let mut rgb_frame = ffmpeg_next::util::frame::video::Video::empty();
-					scaler.run(&decoded, &mut rgb_frame)?;
-					
-					if let Some(img) = frame_to_image(&rgb_frame) {
-						let timestamp_secs = target_pts as f64 * time_base.0 as f64 / time_base.1 as f64;
-						frames.push(VideoFrame {
-							image: DynamicImage::ImageRgb8(img),
-							timestamp_secs,
-						});
-						found = true;
-						break;
-					}
+		// Retrieve all frames from this packet
+		loop {
+			let frame = match decode_ctx.receive_frame() {
+				Ok(f) => f,
+				Err(RsmpegError::DecoderDrainError) | Err(RsmpegError::DecoderFlushedError) => break,
+				Err(e) => return Err(e).context("Error decoding frame")?,
+			};
+
+			// Calculate timestamp in seconds
+			let pts = frame.pts;
+			let timestamp = pts as f64 * time_base.num as f64 / time_base.den as f64;
+
+			// Check if this frame matches our target timestamp
+			if current_ts_idx < target_timestamps.len()
+				&& timestamp >= target_timestamps[current_ts_idx]
+			{
+				let rgb_image = frame_to_rgb(&frame, &decode_ctx)?;
+				frames.push((timestamp, rgb_image));
+				current_ts_idx += 1;
+
+				// Exit early if we have all frames
+				if current_ts_idx >= count {
+					return Ok(frames);
 				}
-				
-				if found {
-					break;
-				}
+			}
+		}
+	}
+
+	// Flush decoder
+	decode_ctx.send_packet(None)?;
+	loop {
+		let frame = match decode_ctx.receive_frame() {
+			Ok(f) => f,
+			Err(RsmpegError::DecoderDrainError) | Err(RsmpegError::DecoderFlushedError) => break,
+			Err(e) => return Err(e).context("Error flushing decoder")?,
+		};
+
+		let pts = frame.pts;
+		let timestamp = pts as f64 * time_base.num as f64 / time_base.den as f64;
+
+		if current_ts_idx < target_timestamps.len()
+			&& timestamp >= target_timestamps[current_ts_idx]
+		{
+			let rgb_image = frame_to_rgb(&frame, &decode_ctx)?;
+			frames.push((timestamp, rgb_image));
+			current_ts_idx += 1;
+
+			if current_ts_idx >= count {
+				break;
 			}
 		}
 	}
 
 	if frames.is_empty() {
-		anyhow::bail!("No frames could be extracted from video");
+		anyhow::bail!("Failed to extract any frames from video");
 	}
 
 	Ok(frames)
 }
 
-/// Converts FFmpeg frame to image::RgbImage
-fn frame_to_image(frame: &ffmpeg_next::util::frame::video::Video) -> Option<RgbImage> {
-	let width = frame.width();
-	let height = frame.height();
-	let data = frame.data(0);
-	let stride = frame.stride(0);
+/// Converts an AVFrame to RgbImage using swscale
+fn frame_to_rgb(frame: &AVFrame, decode_ctx: &AVCodecContext) -> Result<RgbImage> {
+	let width = decode_ctx.width as u32;
+	let height = decode_ctx.height as u32;
 
-	let mut img = RgbImage::new(width, height);
-	
-	for y in 0..height {
-		let row_start = (y as usize) * stride;
-		for x in 0..width {
-			let pixel_start = row_start + (x as usize) * 3;
-			if pixel_start + 2 < data.len() {
-				img.put_pixel(x, y, image::Rgb([
-					data[pixel_start],
-					data[pixel_start + 1],
-					data[pixel_start + 2],
-				]));
-			}
-		}
+	// Create output buffer for RGB24
+	let dst_linesize = width as i32 * 3;
+	let buffer_size = (dst_linesize * height as i32) as usize;
+	let mut rgb_data = vec![0u8; buffer_size];
+
+	// Initialize swscale context
+	let mut sws_ctx = SwsContext::get_context(
+		decode_ctx.width,
+		decode_ctx.height,
+		decode_ctx.pix_fmt,
+		decode_ctx.width,
+		decode_ctx.height,
+		ffi::AV_PIX_FMT_RGB24,
+		ffi::SWS_BILINEAR,
+	)
+	.context("Failed to initialize swscale context")?;
+
+	// Convert frame to RGB24
+	let dst_data = [rgb_data.as_mut_ptr(), std::ptr::null_mut(), std::ptr::null_mut(), std::ptr::null_mut()];
+	let dst_linesize = [dst_linesize, 0, 0, 0];
+
+	unsafe {
+		sws_ctx.scale_frame(
+			frame.data.as_ptr() as *const *const u8,
+			frame.linesize.as_ptr(),
+			0,
+			decode_ctx.height,
+			dst_data.as_ptr() as *const *mut u8,
+			dst_linesize.as_ptr(),
+		)
+		.context("Failed to scale frame")?;
 	}
 
-	Some(img)
+	// Create RgbImage from buffer
+	RgbImage::from_raw(width, height, rgb_data)
+		.context("Failed to create RgbImage from raw data")
 }
 
-/// Formats timestamp as MM:SS
+/// Formats a timestamp in seconds to MM:SS format
 pub fn format_timestamp(seconds: f64) -> String {
-	let mins = (seconds / 60.0) as u32;
-	let secs = (seconds % 60.0) as u32;
-	format!("{:02}:{:02}", mins, secs)
+	let total_seconds = seconds.floor() as u64;
+	let minutes = total_seconds / 60;
+	let secs = total_seconds % 60;
+	format!("{:02}:{:02}", minutes, secs)
 }

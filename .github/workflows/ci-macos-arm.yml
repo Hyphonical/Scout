@@ -1,0 +1,75 @@
+name: macOS ARM Build
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: 🚧 macOS ARM64 (Apple Silicon)
+    runs-on: macos-latest
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v6
+
+      - name: 🦀 Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: 📦 Cache Cargo
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: macos-aarch64-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: 🔧 Install FFmpeg Dependencies
+        run: brew install cmake nasm pkg-config
+
+      - name: 🚧 Build Image-Only
+        run: cargo build --release --target aarch64-apple-darwin
+
+      - name: 🎥 Build with Video Support
+        run: cargo build --release --target aarch64-apple-darwin --features video
+
+      - name: 📦 Package Image-Only
+        run: |
+          mkdir -p dist-image
+          cp target/aarch64-apple-darwin/release/scout dist-image/
+          cp LICENSE README.md dist-image/
+          cd dist-image
+          tar czf ../scout-macos-arm64.tar.gz *
+
+      - name: 📦 Package Video Variant
+        run: |
+          mkdir -p dist-video
+          cp target/aarch64-apple-darwin/release/scout dist-video/
+          cp LICENSE README.md dist-video/
+          cd dist-video
+          tar czf ../scout-macos-arm64-video.tar.gz *
+
+      - name: 📤 Upload Image-Only
+        uses: actions/upload-artifact@v4
+        with:
+          name: scout-macos-arm64.tar.gz
+          path: scout-macos-arm64.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: 📤 Upload Video Variant
+        uses: actions/upload-artifact@v4
+        with:
+          name: scout-macos-arm64-video.tar.gz
+          path: scout-macos-arm64-video.tar.gz
+          if-no-files-found: error
+          retention-days: 7

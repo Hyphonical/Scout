@@ -1,0 +1,87 @@
+name: Windows Build
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: 🚧 Windows x86_64
+    runs-on: windows-latest
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v6
+
+      - name: 🦀 Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: 📦 Cache Cargo
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: windows-x86_64-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: 🚧 Build Image-Only
+        run: cargo build --release --target x86_64-pc-windows-msvc
+
+      - name: 🎥 Build with Video Support
+        run: cargo build --release --target x86_64-pc-windows-msvc --features video
+        continue-on-error: true
+
+      - name: 🔩 Compress with UPX (Image-Only)
+        uses: crazy-max/ghaction-upx@v3
+        with:
+          version: latest
+          files: ./target/x86_64-pc-windows-msvc/release/scout.exe
+          args: -9 -q --lzma
+
+      - name: 📦 Package Image-Only
+        run: |
+          mkdir dist-image
+          copy target\x86_64-pc-windows-msvc\release\scout.exe dist-image\
+          copy LICENSE dist-image\
+          copy README.md dist-image\
+          cd dist-image
+          7z a -mx=9 ..\scout-windows-x64.zip *
+
+      - name: 📦 Package Video Variant (if built)
+        if: success()
+        run: |
+          if (Test-Path target\x86_64-pc-windows-msvc\release\scout.exe) {
+            mkdir dist-video
+            copy target\x86_64-pc-windows-msvc\release\scout.exe dist-video\
+            copy LICENSE dist-video\
+            copy README.md dist-video\
+            cd dist-video
+            7z a -mx=9 ..\scout-windows-x64-video.zip *
+          }
+        shell: pwsh
+
+      - name: 📤 Upload Image-Only
+        uses: actions/upload-artifact@v4
+        with:
+          name: scout-windows-x64.zip
+          path: scout-windows-x64.zip
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: 📤 Upload Video Variant (if exists)
+        if: hashFiles('scout-windows-x64-video.zip') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: scout-windows-x64-video.zip
+          path: scout-windows-x64-video.zip
+          if-no-files-found: ignore
+          retention-days: 7
