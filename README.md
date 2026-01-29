@@ -48,8 +48,32 @@ So if you're the kind of person who has 10,000+ photos scattered across folders 
 
 ### Build from source
 
+**Image-only build (recommended for local development):**
 ```bash
-git clone https://github.com/yourusername/scout.git
+git clone https://github.com/Hyphonical/Scout.git
+cd scout
+cargo build --release
+```
+
+**Video build (requires FFmpeg build tools, see [BUILD.md](BUILD.md)):**
+```bash
+cargo build --release --features video
+```
+
+For detailed build instructions and CI setup, see **[BUILD.md](BUILD.md)**.
+
+Binary will be at `target/release/scout` (or `scout.exe` on Windows).
+
+### Download pre-built binaries
+
+Check the [Releases](https://github.com/Hyphonical/Scout/releases) page for pre-built binaries:
+- `scout-{platform}-x64` - Image search only (smaller, faster builds)
+- `scout-{platform}-x64-video` - Includes video frame extraction support
+
+## Quick Start 🚀
+
+```bash
+git clone https://github.com/Hyphonical/Scout.git
 cd scout
 cargo build --release
 ```

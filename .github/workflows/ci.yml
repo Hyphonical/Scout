@@ -45,19 +45,19 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            artifact: scout-linux-x64.tar.gz
+            artifact-base: scout-linux-x64
 
           - os: macos-latest
             target: x86_64-apple-darwin
-            artifact: scout-macos-x64.tar.gz
+            artifact-base: scout-macos-x64
 
           - os: macos-latest
             target: aarch64-apple-darwin
-            artifact: scout-macos-arm64.tar.gz
+            artifact-base: scout-macos-arm64
 
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            artifact: scout-windows-x64.zip
+            artifact-base: scout-windows-x64
 
     steps:
       - name: 📥 Checkout
@@ -93,8 +93,8 @@ jobs:
             --cmake_extra_defines FETCHCONTENT_FULLY_DISCONNECTED=OFF
         shell: bash
 
-      # --- Build ---
-      - name: 🚧 Build Release Binary (macOS x64)
+      # --- Build Image-Only Variant (Default) ---
+      - name: 🚧 Build Release Binary - Image Only (macOS x64)
         if: matrix.target == 'x86_64-apple-darwin'
         run: cargo build --release --target ${{ matrix.target }}
         env:
@@ -102,12 +102,25 @@ jobs:
           ORT_LIB_LOCATION: ${{ github.workspace }}/onnxruntime/build/MacOS/Release
           ORT_USE_STATIC_LIBS: true
 
-      - name: 🚧 Build Release Binary (Other Platforms)
+      - name: 🚧 Build Release Binary - Image Only (Other Platforms)
         if: matrix.target != 'x86_64-apple-darwin'
         run: cargo build --release --target ${{ matrix.target }}
 
-      # --- UPX ---
-      - name: 🔩 Compress Binary with UPX (Windows)
+      # --- Build Video Variant (With FFmpeg) ---
+      - name: 🎥 Build Release Binary - With Video Support (macOS x64)
+        if: matrix.target == 'x86_64-apple-darwin'
+        run: cargo build --release --target ${{ matrix.target }} --features video
+        env:
+          ORT_STRATEGY: system
+          ORT_LIB_LOCATION: ${{ github.workspace }}/onnxruntime/build/MacOS/Release
+          ORT_USE_STATIC_LIBS: true
+
+      - name: 🎥 Build Release Binary - With Video Support (Other Platforms)
+        if: matrix.target != 'x86_64-apple-darwin'
+        run: cargo build --release --target ${{ matrix.target }} --features video
+
+      # --- UPX (Image-Only Binary) ---
+      - name: 🔩 Compress Binary with UPX (Windows - Image Only)
         if: matrix.target == 'x86_64-pc-windows-msvc'
         uses: crazy-max/ghaction-upx@v3
         with:
@@ -116,7 +129,7 @@ jobs:
             ./target/${{ matrix.target }}/release/scout.exe
           args: -9 -q --lzma
 
-      - name: 🔩 Compress Binary with UPX (Linux)
+      - name: 🔩 Compress Binary with UPX (Linux - Image Only)
         if: matrix.target == 'x86_64-unknown-linux-gnu'
         uses: crazy-max/ghaction-upx@v3
         with:
@@ -125,35 +138,87 @@ jobs:
             ./target/${{ matrix.target }}/release/scout
           args: -9 -q --lzma
 
-      # --- Package ---
-      - name: 📦 Package Artifact (Unix)
+      # --- Package Image-Only Variant ---
+      - name: 📦 Package Artifact - Image Only (Unix)
         if: matrix.os != 'windows-latest'
         run: |
-          mkdir dist
-          cp target/${{ matrix.target }}/release/scout dist/
-          cp LICENSE README.md dist/
-          cd dist
-          tar czf ${{ matrix.artifact }} *
+          mkdir -p dist-image
+          cp target/${{ matrix.target }}/release/scout dist-image/
+          cp LICENSE README.md dist-image/
+          cd dist-image
+          tar czf ../${{ matrix.artifact-base }}.tar.gz *
           cd ..
         shell: bash
 
-      - name: 📦 Package Artifact (Windows)
+      - name: 📦 Package Artifact - Image Only (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          mkdir dist
-          copy target\${{ matrix.target }}\release\scout.exe dist\
-          copy LICENSE dist\
-          copy README.md dist\
-          cd dist
-          7z a -mx=9 ${{ matrix.artifact }} *
+          mkdir dist-image
+          copy target\${{ matrix.target }}\release\scout.exe dist-image\
+          copy LICENSE dist-image\
+          copy README.md dist-image\
+          cd dist-image
+          7z a -mx=9 ..\${{ matrix.artifact-base }}.zip *
           cd ..
         shell: pwsh
 
-      # --- Upload  ---
-      - name: 📤 Upload Artifact
+      # --- Package Video Variant ---
+      - name: 📦 Package Artifact - Video (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          mkdir -p dist-video
+          cp target/${{ matrix.target }}/release/scout dist-video/
+          cp LICENSE README.md dist-video/
+          cd dist-video
+          tar czf ../${{ matrix.artifact-base }}-video.tar.gz *
+          cd ..
+        shell: bash
+
+      - name: 📦 Package Artifact - Video (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          mkdir dist-video
+          copy target\${{ matrix.target }}\release\scout.exe dist-video\
+          copy LICENSE dist-video\
+          copy README.md dist-video\
+          cd dist-video
+          7z a -mx=9 ..\${{ matrix.artifact-base }}-video.zip *
+          cd ..
+        shell: pwsh
+
+      # --- Upload Both Variants ---
+      - name: 📤 Upload Image-Only Artifact (Unix)
+        if: matrix.os != 'windows-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
-          path: ${{ matrix.artifact }}
+          name: ${{ matrix.artifact-base }}.tar.gz
+          path: ${{ matrix.artifact-base }}.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: 📤 Upload Image-Only Artifact (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-base }}.zip
+          path: ${{ matrix.artifact-base }}.zip
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: 📤 Upload Video Artifact (Unix)
+        if: matrix.os != 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-base }}-video.tar.gz
+          path: ${{ matrix.artifact-base }}-video.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: 📤 Upload Video Artifact (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-base }}-video.zip
+          path: ${{ matrix.artifact-base }}-video.zip
           if-no-files-found: error
           retention-days: 7

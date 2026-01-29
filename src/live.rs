@@ -1,4 +1,7 @@
-// Live - Interactive TUI search
+//! Interactive terminal UI for real-time image search
+//!
+//! Provides a TUI with search-as-you-type functionality, result navigation,
+//! and file metadata display.
 
 use anyhow::Result;
 use crossterm::{

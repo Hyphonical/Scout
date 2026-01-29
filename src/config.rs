@@ -1,4 +1,6 @@
-// Config - Application constants
+//! Application configuration constants
+//!
+//! Centralized configuration for model files, paths, and runtime parameters.
 
 use std::path::PathBuf;
 
@@ -25,6 +27,16 @@ pub const IMAGE_EXTENSIONS: &[&str] = &[
 	"jpg", "jpeg", "png", "gif", "bmp", "webp", "tiff", "tif", "ico", "avif",
 ];
 
+#[cfg(feature = "video")]
+pub const VIDEO_EXTENSIONS: &[&str] = &[
+	"mp4", "mkv", "avi", "mov", "wmv", "flv", "webm", "m4v", "mpg", "mpeg",
+];
+
+#[cfg(feature = "video")]
+pub const VIDEO_FRAMES_TO_EXTRACT: usize = 10;
+
+/// Locates the models directory by searching up to 5 levels from executable,
+/// then falling back to current working directory
 pub fn find_models_dir() -> Option<PathBuf> {
 	if let Ok(exe) = std::env::current_exe() {
 		let mut dir = exe.parent();
@@ -45,18 +57,21 @@ pub fn find_models_dir() -> Option<PathBuf> {
 	cwd.is_dir().then_some(cwd)
 }
 
+/// Returns the absolute path to the vision model file if it exists
 pub fn get_vision_model_path() -> Option<PathBuf> {
 	let models = find_models_dir()?;
 	let path = models.join(VISION_MODEL);
 	path.exists().then_some(path)
 }
 
+/// Returns the absolute path to the text model file if it exists
 pub fn get_text_model_path() -> Option<PathBuf> {
 	let models = find_models_dir()?;
 	let path = models.join(TEXT_MODEL);
 	path.exists().then_some(path)
 }
 
+/// Returns the absolute path to the tokenizer file if it exists
 pub fn get_tokenizer_path() -> Option<PathBuf> {
 	let models = find_models_dir()?;
 	let path = models.join(TOKENIZER);

@@ -1,4 +1,7 @@
-// Scanner - Image discovery and filtering
+//! Image discovery and filtering
+//!
+//! Scans directories for images, applies filters, and tracks indexing status.
+//! Handles deduplication, version detection, and scan result reporting.
 
 use anyhow::Result;
 use image::ImageReader;
@@ -6,10 +9,14 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
-use crate::sidecar::{compute_file_hash, find_sidecar, sidecar_path, ImageSidecar};
+use crate::sidecar::{compute_file_hash, find_sidecar, sidecar_path, Sidecar};
 use crate::config::{IMAGE_EXTENSIONS, SIDECAR_DIR};
+#[cfg(feature = "video")]
+use crate::config::VIDEO_EXTENSIONS;
 use crate::logger::{log, Level};
+use crate::types::MediaType;
 
+/// Configurable filters for image scanning
 #[derive(Debug, Clone)]
 pub struct ScanFilters {
 	pub min_width: u32,
@@ -70,12 +77,15 @@ impl ScanFilters {
 	}
 }
 
+/// Represents an image that needs processing
 pub struct ImageEntry {
 	pub path: PathBuf,
 	pub filename: String,
 	pub sidecar_path: PathBuf,
+	pub media_type: MediaType,
 }
 
+/// Results from a directory scan operation
 pub struct ScanResult {
 	pub to_process: Vec<ImageEntry>,
 	pub indexed_count: usize,
@@ -90,6 +100,13 @@ impl ScanResult {
 	}
 }
 
+/// Scans a directory for images, checking against existing sidecars
+///
+/// # Arguments
+/// * `directory` - Root directory to scan
+/// * `recursive` - Whether to scan subdirectories
+/// * `force` - Whether to reprocess already-indexed images
+/// * `filters` - Filtering criteria to apply
 pub fn scan_directory(
 	directory: &Path,
 	recursive: bool,
@@ -128,9 +145,22 @@ pub fn scan_directory(
 	for entry in walker.into_iter().filter_map(|e| e.ok()) {
 		let path = entry.path();
 
-		if is_scout_path(path) || !path.is_file() || !is_image(path) {
+		if is_scout_path(path) || !path.is_file() {
 			continue;
 		}
+
+		let media_type = if is_image(path) {
+			MediaType::Image
+		} else {
+			#[cfg(feature = "video")]
+			if is_video(path) {
+				MediaType::Video
+			} else {
+				continue;
+			}
+			#[cfg(not(feature = "video"))]
+			continue
+		};
 
 		let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 		if !seen.insert(canonical.clone()) {
@@ -163,13 +193,17 @@ pub fn scan_directory(
 
 		if !force {
 			if let Some(sidecar_path) = find_sidecar(&hash, &image_dir) {
-				if let Ok(sidecar) = ImageSidecar::load(&sidecar_path) {
+				if let Ok(sidecar) = Sidecar::load_auto(&sidecar_path) {
 					if sidecar.is_current_version() {
 						indexed += 1;
 						continue;
 					}
 					outdated += 1;
-					log(Level::Debug, &format!("Outdated: {} (v{})", filename, sidecar.version));
+					log(Level::Debug, &format!("Outdated: {} (v{})", filename, match &sidecar {
+						Sidecar::Image(img) => &img.version,
+						#[cfg(feature = "video")]
+						Sidecar::Video(vid) => &vid.version,
+					}));
 				}
 			}
 		}
@@ -178,6 +212,7 @@ pub fn scan_directory(
 			path: canonical,
 			filename,
 			sidecar_path: sidecar_path(&hash, &image_dir),
+			media_type,
 		});
 	}
 
@@ -194,6 +229,13 @@ fn is_image(path: &Path) -> bool {
 	path.extension()
 		.and_then(|e| e.to_str())
 		.is_some_and(|ext| IMAGE_EXTENSIONS.iter().any(|e| e.eq_ignore_ascii_case(ext)))
+}
+
+#[cfg(feature = "video")]
+fn is_video(path: &Path) -> bool {
+	path.extension()
+		.and_then(|e| e.to_str())
+		.is_some_and(|ext| VIDEO_EXTENSIONS.iter().any(|e| e.eq_ignore_ascii_case(ext)))
 }
 
 fn is_scout_path(path: &Path) -> bool {

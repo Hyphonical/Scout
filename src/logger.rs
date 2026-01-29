@@ -1,4 +1,7 @@
-// Logger - Colored console output
+//! Structured logging with colored console output
+//!
+//! Provides consistent, time-stamped logging with different severity levels.
+//! Supports clickable file hyperlinks for terminals that support OSC 8.
 
 use chrono::Local;
 use colored::*;
@@ -6,6 +9,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 static VERBOSE: AtomicBool = AtomicBool::new(false);
 
+/// Enables or disables verbose (debug) logging
 pub fn set_verbose(v: bool) {
 	VERBOSE.store(v, Ordering::Relaxed);
 }
@@ -14,6 +18,7 @@ pub fn is_verbose() -> bool {
 	VERBOSE.load(Ordering::Relaxed)
 }
 
+/// Creates a clickable terminal hyperlink using OSC 8 escape sequences
 pub fn hyperlink(text: &str, path: &std::path::Path) -> String {
 	let absolute = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 
@@ -38,6 +43,9 @@ pub enum Level {
 	Debug,
 }
 
+/// Logs a message with the specified severity level
+///
+/// Debug messages are only shown when verbose mode is enabled
 pub fn log(level: Level, message: &str) {
 	if level == Level::Debug && !is_verbose() {
 		return;
@@ -54,11 +62,13 @@ pub fn log(level: Level, message: &str) {
 	println!("[{}] {} {}", time, icon, message);
 }
 
+/// Prints a styled section header
 pub fn header(title: &str) {
 	println!();
 	println!("{}", format!("─── {} ───", title).bright_blue().bold());
 }
 
+/// Prints a summary of processing results
 pub fn summary(processed: usize, skipped: usize, errors: usize, duration_secs: f32) {
 	println!();
 	header("Summary");

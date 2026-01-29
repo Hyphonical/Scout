@@ -2,3 +2,4 @@
 /demo
 **/*.onnx
 **/tokenizer.json
+**/CHANGES.md

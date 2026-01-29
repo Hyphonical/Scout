@@ -1,12 +1,21 @@
-// Search - Semantic image search
+//! Semantic image search functionality
+//!
+//! Performs similarity search across indexed images using text queries,
+//! reference images, or weighted combinations of both.
 
 use std::path::Path;
+#[cfg(feature = "video")]
+use std::path::PathBuf;
 
 use crate::logger::{log, Level};
 use crate::models::ModelManager;
-use crate::sidecar::{current_version, iter_sidecars, ImageSidecar};
+use crate::sidecar::{current_version, iter_sidecars, Sidecar};
 use crate::types::{CombineWeight, Embedding, SearchMatch};
 
+#[cfg(feature = "video")]
+use crate::types::MediaType;
+
+/// Search query variants supporting different search modes
 pub enum SearchQuery<'a> {
 	Text(&'a str),
 	Image(&'a Path),
@@ -14,6 +23,7 @@ pub enum SearchQuery<'a> {
 }
 
 impl<'a> SearchQuery<'a> {
+	/// Builds the query embedding using appropriate model(s)
 	fn build_embedding(&self, models: &mut ModelManager) -> Option<Embedding> {
 		match self {
 			SearchQuery::Text(text) => {
@@ -40,6 +50,16 @@ impl<'a> SearchQuery<'a> {
 	}
 }
 
+/// Searches indexed images for semantic matches
+///
+/// # Arguments
+/// * `root` - Root directory containing indexed images
+/// * `query` - Search query (text, image, or combined)
+/// * `min_score` - Minimum similarity threshold [0.0, 1.0]
+/// * `exclude_path` - Optional path to exclude from results (e.g., reference image)
+/// * `recursive` - Whether to search subdirectories
+///
+/// Returns matches sorted by descending similarity score
 pub fn search(
 	root: &Path,
 	query: SearchQuery,
@@ -59,16 +79,18 @@ pub fn search(
 
 	let exclude_canonical = exclude_path.and_then(|p| p.canonicalize().ok());
 	let mut results = Vec::new();
+	#[cfg(feature = "video")]
+	let mut video_best: std::collections::HashMap<PathBuf, (f32, f64)> = std::collections::HashMap::new();
 	let mut outdated = 0;
 
 	for (sidecar_path, base_dir) in iter_sidecars(root, recursive) {
-		let Ok(sidecar) = ImageSidecar::load(&sidecar_path) else { continue };
+		let Ok(sidecar) = Sidecar::load_auto(&sidecar_path) else { continue };
 
 		if !sidecar.is_current_version() {
 			outdated += 1;
 		}
 
-		let source_path = base_dir.join(&sidecar.filename);
+		let source_path = base_dir.join(sidecar.filename());
 
 		if let Some(ref exclude) = exclude_canonical {
 			if let Ok(canonical) = source_path.canonicalize() {
@@ -78,11 +100,47 @@ pub fn search(
 			}
 		}
 
-		let score = query_emb.similarity(&sidecar.embedding());
+		match sidecar {
+			Sidecar::Image(img) => {
+				let score = query_emb.similarity(&img.embedding());
+				if score >= min_score {
+					results.push(SearchMatch::new(source_path, score));
+				}
+			}
+			#[cfg(feature = "video")]
+			Sidecar::Video(vid) => {
+				// Find best matching frame in video
+				let mut best_score = 0.0;
+				let mut best_timestamp = 0.0;
+				
+				for (timestamp, frame_emb) in vid.frames() {
+					let score = query_emb.similarity(&frame_emb);
+					if score > best_score {
+						best_score = score;
+						best_timestamp = timestamp;
+					}
+				}
 
-		if score >= min_score {
-			results.push(SearchMatch::new(source_path, score));
+				if best_score >= min_score {
+					// Track only the best match for each video
+					let canonical = source_path.canonicalize().unwrap_or_else(|_| source_path.clone());
+					video_best.entry(canonical)
+						.and_modify(|(s, ts)| {
+							if best_score > *s {
+								*s = best_score;
+								*ts = best_timestamp;
+							}
+						})
+						.or_insert((best_score, best_timestamp));
+				}
+			}
 		}
+	}
+
+	// Add video results (one per video)
+	#[cfg(feature = "video")]
+	for (path, (score, timestamp)) in video_best {
+		results.push(SearchMatch::new_video(path, score, timestamp));
 	}
 
 	if outdated > 0 {

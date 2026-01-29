@@ -1,7 +1,12 @@
+//! Command-line interface definitions
+//!
+//! Defines the CLI structure, commands, and argument parsing using clap.
+
 use clap::{builder::Styles, Parser, Subcommand, ValueEnum};
 use colored::Colorize;
 use std::path::PathBuf;
 
+/// ONNX Runtime execution provider options
 #[derive(Debug, Clone, Copy, Default, ValueEnum)]
 pub enum Provider {
 	#[default]
@@ -13,6 +18,7 @@ pub enum Provider {
 	Coreml,
 }
 
+/// Validates weight parameter is in range [0.0, 1.0]
 fn parse_weight(s: &str) -> Result<f32, String> {
 	let val: f32 = s.parse().map_err(|_| format!("'{}' is not a valid number", s))?;
 	if (0.0..=1.0).contains(&val) {

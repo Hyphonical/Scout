@@ -1,4 +1,7 @@
-// Scout - AI-powered semantic image search
+//! Scout - AI-powered semantic image search
+//!
+//! A command-line tool for semantic image search using SigLIP2 models.
+//! Supports text-based, image-based, and hybrid search queries.
 
 mod cli;
 mod config;
@@ -10,6 +13,9 @@ mod scanner;
 mod search;
 mod sidecar;
 mod types;
+
+#[cfg(feature = "video")]
+mod video;
 
 use anyhow::Result;
 use clap::{CommandFactory, Parser};
@@ -24,7 +30,9 @@ use runtime::set_provider;
 use scanner::{scan_directory, ScanFilters};
 use search::{search, SearchQuery};
 use sidecar::ImageSidecar;
-use types::CombineWeight;
+#[cfg(feature = "video")]
+use sidecar::VideoSidecar;
+use types::{CombineWeight, MediaType};
 
 fn main() -> Result<()> {
 	let cli = Cli::parse();
@@ -222,6 +230,20 @@ fn run_search(
 		let rank = format!("#{}", i + 1).bright_blue().bold();
 		let link = logger::hyperlink(name, &result.path);
 
+		#[cfg(feature = "video")]
+		if result.media_type == types::MediaType::Video {
+			if let Some(ts) = result.timestamp {
+				let timestamp = video::format_timestamp(ts);
+				let ts_display = format!("@{}", timestamp).yellow();
+				println!("  {} {} {} {}", rank, link, ts_display, score_pct);
+			} else {
+				println!("  {} {} {}", rank, link, score_pct);
+			}
+		} else {
+			println!("  {} {} {}", rank, link, score_pct);
+		}
+
+		#[cfg(not(feature = "video"))]
 		println!("  {} {} {}", rank, link, score_pct);
 	}
 
@@ -249,25 +271,80 @@ fn process_images(images: &[scanner::ImageEntry], models: &mut ModelManager) -> 
 		let queue = format!("[{}/{}]", index + 1, total).bright_blue().bold();
 
 		let start = Instant::now();
-		match models.encode_image(&entry.path) {
-			Ok((embedding, hash)) => {
-				let processing_ms = start.elapsed().as_millis() as u64;
-				let sidecar = ImageSidecar::new(&entry.filename, hash, embedding, processing_ms);
+		
+		match entry.media_type {
+			MediaType::Image => {
+				match models.encode_image(&entry.path) {
+					Ok((embedding, hash)) => {
+						let processing_ms = start.elapsed().as_millis() as u64;
+						let sidecar = ImageSidecar::new(&entry.filename, hash, embedding, processing_ms);
 
-				if let Err(e) = sidecar.save(&entry.sidecar_path) {
-					log(Level::Error, &format!("{} {}: {}", queue, entry.filename, e));
-					errors += 1;
-					continue;
+						if let Err(e) = sidecar.save(&entry.sidecar_path) {
+							log(Level::Error, &format!("{} {}: {}", queue, entry.filename, e));
+							errors += 1;
+							continue;
+						}
+
+						let timing = format!("{}ms", processing_ms).dimmed();
+						let link = logger::hyperlink(&entry.filename, &entry.path);
+						log(Level::Success, &format!("{} {} {}", queue, link, timing));
+						processed += 1;
+					}
+					Err(e) => {
+						let link = logger::hyperlink(&entry.filename, &entry.path);
+						log(Level::Error, &format!("{} {}: {}", queue, link, e));
+						errors += 1;
+					}
 				}
-
-				let timing = format!("{}ms", processing_ms).dimmed();
-				let link = logger::hyperlink(&entry.filename, &entry.path);
-				log(Level::Success, &format!("{} {} {}", queue, link, timing));
-				processed += 1;
 			}
-			Err(e) => {
-				let link = logger::hyperlink(&entry.filename, &entry.path);
-				log(Level::Error, &format!("{} {}: {}", queue, link, e));
+			#[cfg(feature = "video")]
+			MediaType::Video => {
+				match video::extract_frames(&entry.path, None) {
+					Ok(frames) => {
+						let mut frame_embeddings = Vec::new();
+						
+						for frame in frames {
+							match models.encode_image_from_dynamic(&frame.image) {
+								Ok((emb, _)) => {
+									frame_embeddings.push((frame.timestamp_secs, emb));
+								}
+								Err(e) => {
+									log(Level::Warning, &format!("{} Frame extraction error: {}", queue, e));
+								}
+							}
+						}
+
+						if frame_embeddings.is_empty() {
+							log(Level::Error, &format!("{} {}: No frames extracted", queue, entry.filename));
+							errors += 1;
+							continue;
+						}
+
+						let processing_ms = start.elapsed().as_millis() as u64;
+						let hash = sidecar::compute_file_hash(&entry.path)?;
+						let sidecar = VideoSidecar::new(&entry.filename, hash, frame_embeddings, processing_ms);
+
+						if let Err(e) = sidecar.save(&entry.sidecar_path) {
+							log(Level::Error, &format!("{} {}: {}", queue, entry.filename, e));
+							errors += 1;
+							continue;
+						}
+
+						let timing = format!("{}ms", processing_ms).dimmed();
+						let link = logger::hyperlink(&entry.filename, &entry.path);
+						log(Level::Success, &format!("{} {} {} 🎥", queue, link, timing));
+						processed += 1;
+					}
+					Err(e) => {
+						let link = logger::hyperlink(&entry.filename, &entry.path);
+						log(Level::Error, &format!("{} {}: {}", queue, link, e));
+						errors += 1;
+					}
+				}
+			}
+			#[cfg(not(feature = "video"))]
+			MediaType::Video => {
+				log(Level::Error, &format!("{} Video support not enabled (rebuild with --features video)", queue));
 				errors += 1;
 			}
 		}

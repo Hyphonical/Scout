@@ -1,4 +1,8 @@
-// Runtime - ONNX execution provider selection and session management
+//! ONNX Runtime execution provider management
+//!
+//! Handles automatic and manual selection of hardware acceleration backends:
+//! - Auto: TensorRT > CUDA > CoreML > XNNPACK > CPU
+//! - Manual: User-specified provider with CPU fallback
 
 use anyhow::{Context, Result};
 use ort::session::builder::{GraphOptimizationLevel, SessionBuilder};
@@ -11,6 +15,7 @@ use crate::logger::{log, Level};
 
 static EP_PREFERENCE: OnceLock<Provider> = OnceLock::new();
 
+/// Sets the global execution provider preference
 pub fn set_provider(provider: Provider) {
 	let _ = EP_PREFERENCE.set(provider);
 }
@@ -19,6 +24,7 @@ fn get_provider() -> Provider {
 	EP_PREFERENCE.get().copied().unwrap_or_default()
 }
 
+/// Registers execution providers based on global preference
 fn register_execution_providers(builder: &mut SessionBuilder) {
 	match get_provider() {
 		Provider::Cpu => {
@@ -145,6 +151,12 @@ fn try_register_coreml(builder: &mut SessionBuilder) -> bool {
 	false
 }
 
+/// Creates an optimized ONNX Runtime session for the given model
+///
+/// Automatically applies:
+/// - Graph optimization level 3
+/// - 4 intra-op threads
+/// - Configured execution provider
 pub fn create_session(model_path: &Path) -> Result<Session> {
 	let mut builder = Session::builder().context("Failed to create session builder")?;
 	register_execution_providers(&mut builder);

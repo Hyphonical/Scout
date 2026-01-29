@@ -1,8 +1,11 @@
-// Models - Centralized ONNX model management
+//! ONNX model management and inference
+//!
+//! Manages SigLIP2 vision and text models with lazy loading.
+//! Handles image preprocessing, tokenization, and embedding extraction.
 
 use anyhow::{Context, Result};
 use ndarray::{Array, IxDyn};
-use ort::{session::Session, value::Value};
+use ort::{session::Session, session::SessionOutputs, value::Value};
 use std::path::Path;
 use tokenizers::Tokenizer;
 
@@ -11,7 +14,7 @@ use crate::logger::{log, Level};
 use crate::runtime::create_session;
 use crate::types::{Embedding, ImageHash};
 
-/// Vision model for image embeddings
+/// SigLIP2 vision model for image embeddings
 pub struct VisionModel {
 	session: Session,
 }
@@ -29,21 +32,13 @@ impl VisionModel {
 		let data = pixels.into_raw_vec_and_offset().0;
 		let input = Value::from_array((shape, data))?;
 		let outputs = self.session.run(ort::inputs!["pixel_values" => input])?;
-
-		let embedding_data = if let Some(pooler) = outputs.get("pooler_output") {
-			let (shape, data) = pooler.try_extract_tensor::<f32>()?;
-			extract_embedding(data, &shape)
-		} else {
-			let (_, pooler) = outputs.iter().nth(1).context("No pooler_output in vision model")?;
-			let (shape, data) = pooler.try_extract_tensor::<f32>()?;
-			extract_embedding(data, &shape)
-		};
-
+		
+		let embedding_data = extract_pooler_output(&outputs, "vision model")?;
 		Ok(Embedding::new(embedding_data))
 	}
 }
 
-/// Text model for query embeddings
+/// SigLIP2 text model for query embeddings
 pub struct TextModel {
 	session: Session,
 	tokenizer: Tokenizer,
@@ -74,20 +69,15 @@ impl TextModel {
 
 		let outputs = self.session.run(ort::inputs!["input_ids" => input_val])?;
 
-		let embedding_data = if let Some(pooler) = outputs.get("pooler_output") {
-			let (shape, data) = pooler.try_extract_tensor::<f32>()?;
-			extract_embedding(data, &shape)
-		} else {
-			let (_, pooler) = outputs.iter().nth(1).context("No pooler_output in text model")?;
-			let (shape, data) = pooler.try_extract_tensor::<f32>()?;
-			extract_embedding(data, &shape)
-		};
-
+		let embedding_data = extract_pooler_output(&outputs, "text model")?;
 		Ok(Embedding::new(embedding_data))
 	}
 }
 
-/// Combined manager for both models (lazy loading)
+/// Unified manager for vision and text models with lazy loading
+///
+/// Models are only loaded when first needed, allowing operations
+/// that only require one model type to avoid loading both.
 pub struct ModelManager {
 	vision: Option<VisionModel>,
 	text: Option<TextModel>,
@@ -125,6 +115,22 @@ impl ModelManager {
 		Ok((embedding, hash))
 	}
 
+	#[cfg(feature = "video")]
+	pub fn encode_image_from_dynamic(&mut self, img: &image::DynamicImage) -> Result<(Embedding, ImageHash)> {
+		if self.vision.is_none() {
+			log(Level::Debug, "Loading vision model");
+			self.vision = Some(VisionModel::load()?);
+		}
+
+		let pixels = preprocess_dynamic_image(img)?;
+		let embedding = self.vision.as_mut().unwrap().encode(pixels)?;
+		
+		// Generate a dummy hash for in-memory images
+		let hash = ImageHash(format!("{:016x}", 0));
+		
+		Ok((embedding, hash))
+	}
+
 	pub fn encode_text(&mut self, text: &str) -> Result<Embedding> {
 		if self.text.is_none() {
 			log(Level::Debug, "Loading text model");
@@ -132,6 +138,21 @@ impl ModelManager {
 		}
 
 		self.text.as_mut().unwrap().encode(text)
+	}
+}
+
+/// Extracts and processes pooler output from ONNX model outputs
+///
+/// Handles both named "pooler_output" and fallback to second output
+fn extract_pooler_output(outputs: &SessionOutputs, model_name: &str) -> Result<Vec<f32>> {
+	if let Some(pooler) = outputs.get("pooler_output") {
+		let (shape, data) = pooler.try_extract_tensor::<f32>()?;
+		Ok(extract_embedding(data, shape))
+	} else {
+		let (_, pooler) = outputs.iter().nth(1)
+			.with_context(|| format!("No pooler_output in {}", model_name))?;
+		let (shape, data) = pooler.try_extract_tensor::<f32>()?;
+		Ok(extract_embedding(data, shape))
 	}
 }
 
@@ -164,6 +185,27 @@ fn preprocess_image(path: &Path) -> Result<Array<f32, IxDyn>> {
 		.with_guessed_format()?
 		.decode()
 		.with_context(|| "Failed to decode")?;
+
+	let resized = img.resize_exact(INPUT_SIZE, INPUT_SIZE, FilterType::CatmullRom);
+	let rgb = resized.to_rgb8();
+	let size = INPUT_SIZE as usize;
+
+	let mut arr = Array::zeros(IxDyn(&[1, 3, size, size]));
+	for y in 0..size {
+		for x in 0..size {
+			let px = rgb.get_pixel(x as u32, y as u32);
+			arr[[0, 0, y, x]] = px[0] as f32 / 255.0;
+			arr[[0, 1, y, x]] = px[1] as f32 / 255.0;
+			arr[[0, 2, y, x]] = px[2] as f32 / 255.0;
+		}
+	}
+
+	Ok(arr)
+}
+
+#[cfg(feature = "video")]
+fn preprocess_dynamic_image(img: &image::DynamicImage) -> Result<Array<f32, IxDyn>> {
+	use image::imageops::FilterType;
 
 	let resized = img.resize_exact(INPUT_SIZE, INPUT_SIZE, FilterType::CatmullRom);
 	let rgb = resized.to_rgb8();
