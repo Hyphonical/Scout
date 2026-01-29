@@ -82,14 +82,7 @@ jobs:
           ldd target/x86_64-unknown-linux-gnu/release/scout | grep -E "(libavcodec|libavformat|libavutil|libswscale)" || (echo "ERROR: FFmpeg not linked!" && exit 1)
           echo "✓ FFmpeg libraries successfully linked"
 
-      - name: 📩 Compress Image-Only Binary with UPX
-        uses: crazy-max/ghaction-upx@v3
-        with:
-          version: latest
-          files: ./target/x86_64-unknown-linux-gnu/release/scout
-          args: -9 -q --lzma
-
-      - name: 📦 Package Image-Only
+      - name:  Package Image-Only
         run: |
           mkdir -p dist-image
           cp target/x86_64-unknown-linux-gnu/release/scout dist-image/
