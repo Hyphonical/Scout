@@ -34,7 +34,9 @@ jobs:
           key: macos-x86_64-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: 🔧 Install FFmpeg Dependencies
-        run: brew install ffmpeg pkg-config
+        run: |
+          brew install ffmpeg pkg-config
+          echo "PKG_CONFIG_PATH=$(brew --prefix ffmpeg)/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
 
       - name: 🔨 Build ONNX Runtime from Source
         run: |
