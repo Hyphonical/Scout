@@ -115,7 +115,6 @@ impl ModelManager {
 		Ok((embedding, hash))
 	}
 
-	#[cfg(feature = "video")]
 	pub fn encode_image_from_dynamic(&mut self, img: &image::DynamicImage) -> Result<(Embedding, ImageHash)> {
 		if self.vision.is_none() {
 			log(Level::Debug, "Loading vision model");
@@ -203,7 +202,6 @@ fn preprocess_image(path: &Path) -> Result<Array<f32, IxDyn>> {
 	Ok(arr)
 }
 
-#[cfg(feature = "video")]
 fn preprocess_dynamic_image(img: &image::DynamicImage) -> Result<Array<f32, IxDyn>> {
 	use image::imageops::FilterType;
 

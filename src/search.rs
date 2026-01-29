@@ -4,16 +4,13 @@
 //! reference images, or weighted combinations of both.
 
 use std::path::Path;
-#[cfg(feature = "video")]
 use std::path::PathBuf;
+use std::collections::HashMap;
 
 use crate::logger::{log, Level};
 use crate::models::ModelManager;
 use crate::sidecar::{current_version, iter_sidecars, Sidecar};
-use crate::types::{CombineWeight, Embedding, SearchMatch};
-
-#[cfg(feature = "video")]
-use crate::types::MediaType;
+use crate::types::{CombineWeight, Embedding, SearchMatch, MediaType};
 
 /// Search query variants supporting different search modes
 pub enum SearchQuery<'a> {
@@ -79,8 +76,7 @@ pub fn search(
 
 	let exclude_canonical = exclude_path.and_then(|p| p.canonicalize().ok());
 	let mut results = Vec::new();
-	#[cfg(feature = "video")]
-	let mut video_best: std::collections::HashMap<PathBuf, (f32, f64)> = std::collections::HashMap::new();
+	let mut video_best: HashMap<PathBuf, (f32, f64)> = HashMap::new();
 	let mut outdated = 0;
 
 	for (sidecar_path, base_dir) in iter_sidecars(root, recursive) {
@@ -107,7 +103,6 @@ pub fn search(
 					results.push(SearchMatch::new(source_path, score));
 				}
 			}
-			#[cfg(feature = "video")]
 			Sidecar::Video(vid) => {
 				// Find best matching frame in video
 				let mut best_score = 0.0;
@@ -138,7 +133,6 @@ pub fn search(
 	}
 
 	// Add video results (one per video)
-	#[cfg(feature = "video")]
 	for (path, (score, timestamp)) in video_best {
 		results.push(SearchMatch::new_video(path, score, timestamp));
 	}

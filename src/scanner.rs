@@ -10,11 +10,10 @@ use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 use crate::sidecar::{compute_file_hash, find_sidecar, sidecar_path, Sidecar};
-use crate::config::{IMAGE_EXTENSIONS, SIDECAR_DIR};
-#[cfg(feature = "video")]
-use crate::config::VIDEO_EXTENSIONS;
+use crate::config::{IMAGE_EXTENSIONS, SIDECAR_DIR, VIDEO_EXTENSIONS};
 use crate::logger::{log, Level};
 use crate::types::MediaType;
+use crate::video;
 
 /// Configurable filters for image scanning
 #[derive(Debug, Clone)]
@@ -151,14 +150,13 @@ pub fn scan_directory(
 
 		let media_type = if is_image(path) {
 			MediaType::Image
-		} else {
-			#[cfg(feature = "video")]
-			if is_video(path) {
-				MediaType::Video
-			} else {
+		} else if is_video(path) {
+			if !video::is_ffmpeg_available() {
+				video::show_ffmpeg_warning_once();
 				continue;
 			}
-			#[cfg(not(feature = "video"))]
+			MediaType::Video
+		} else {
 			continue
 		};
 
@@ -201,7 +199,6 @@ pub fn scan_directory(
 					outdated += 1;
 					log(Level::Debug, &format!("Outdated: {} (v{})", filename, match &sidecar {
 						Sidecar::Image(img) => &img.version,
-						#[cfg(feature = "video")]
 						Sidecar::Video(vid) => &vid.version,
 					}));
 				}
@@ -231,7 +228,6 @@ fn is_image(path: &Path) -> bool {
 		.is_some_and(|ext| IMAGE_EXTENSIONS.iter().any(|e| e.eq_ignore_ascii_case(ext)))
 }
 
-#[cfg(feature = "video")]
 fn is_video(path: &Path) -> bool {
 	path.extension()
 		.and_then(|e| e.to_str())

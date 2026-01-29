@@ -43,7 +43,7 @@ fn styles() -> Styles {
 	name = "scout",
 	author,
 	version,
-	about = "AI-powered semantic image search",
+	about = "AI-powered semantic image and video search.",
 	styles = styles(),
 	disable_help_subcommand = true,
 	after_help = format!(

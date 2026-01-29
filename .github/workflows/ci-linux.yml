@@ -8,7 +8,6 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  FFMPEG_VERSION: "8.0"
 
 jobs:
   build:
@@ -34,124 +33,33 @@ jobs:
             target/
           key: linux-x86_64-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: 🔧 Install FFmpeg Build Dependencies
+      - name: 🔧 Install FFmpeg (for build)
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config yasm nasm \
-                                  libx264-dev libx265-dev libvpx-dev libfdk-aac-dev \
-                                  libmp3lame-dev libopus-dev
+          sudo apt-get install -y ffmpeg libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev libavfilter-dev libavdevice-dev pkg-config
+          ffmpeg -version
 
-      - name: 📦 Cache FFmpeg 8
-        id: cache-ffmpeg
-        uses: actions/cache@v5
-        with:
-          path: ~/ffmpeg-8
-          key: ffmpeg-8.0-linux-unified-${{ runner.os }}
-
-      - name: 🎬 Build FFmpeg 8 from Source
-        if: steps.cache-ffmpeg.outputs.cache-hit != 'true'
-        run: |
-          cd ~
-          wget -q https://ffmpeg.org/releases/ffmpeg-${{ env.FFMPEG_VERSION }}.tar.xz
-          tar xf ffmpeg-${{ env.FFMPEG_VERSION }}.tar.xz
-          cd ffmpeg-${{ env.FFMPEG_VERSION }}
-          ./configure --prefix=$HOME/ffmpeg-8 \
-            --enable-gpl --enable-version3 --enable-nonfree \
-            --enable-shared --disable-static \
-            --enable-libx264 --enable-libx265 --enable-libvpx \
-            --enable-libfdk-aac --enable-libmp3lame --enable-libopus \
-            --disable-doc --disable-htmlpages --disable-manpages \
-            --disable-podpages --disable-txtpages \
-            --enable-rpath
-          make -j$(nproc)
-          make install
-
-      - name: 🔗 Setup FFmpeg Environment
-        run: |
-          echo "PKG_CONFIG_PATH=$HOME/ffmpeg-8/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
-          echo "LD_LIBRARY_PATH=$HOME/ffmpeg-8/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
-          echo "$HOME/ffmpeg-8/bin" >> $GITHUB_PATH
-
-      - name: 🚧 Build Image-Only
+      - name: 🚧 Build Release
         run: cargo build --release --target x86_64-unknown-linux-gnu
 
-      - name: 🎥 Build with Video Support
+      - name: 📦 Package
         run: |
-          cargo build --release --target x86_64-unknown-linux-gnu --features video
-          echo "=== Verifying FFmpeg linkage ==="
-          ldd target/x86_64-unknown-linux-gnu/release/scout | grep -E "(libavcodec|libavformat|libavutil|libswscale)" || (echo "ERROR: FFmpeg not linked!" && exit 1)
-          echo "✓ FFmpeg libraries successfully linked"
-
-      - name:  Package Image-Only
-        run: |
-          mkdir -p dist-image
-          cp target/x86_64-unknown-linux-gnu/release/scout dist-image/
-          cp LICENSE README.md dist-image/
-          cd dist-image
+          mkdir -p dist
+          cp target/x86_64-unknown-linux-gnu/release/scout dist/
+          cp LICENSE README.md dist/
+          cd dist
           tar czf ../scout-linux-x64.tar.gz *
 
-      - name: 📦 Package Video Variant (Unified lib/ Structure)
+      - name: 🔍 Verify Package
         run: |
-          mkdir -p dist-video/lib
-          
-          # Copy the scout binary (built with video support)
-          cp target/x86_64-unknown-linux-gnu/release/scout dist-video/
-          
-          # Copy FFmpeg shared libraries to lib/ (dereference symlinks with -L)
-          cp -L ~/ffmpeg-8/lib/libavcodec.so.* dist-video/lib/
-          cp -L ~/ffmpeg-8/lib/libavformat.so.* dist-video/lib/
-          cp -L ~/ffmpeg-8/lib/libavutil.so.* dist-video/lib/
-          cp -L ~/ffmpeg-8/lib/libswscale.so.* dist-video/lib/
-          cp -L ~/ffmpeg-8/lib/libswresample.so.* dist-video/lib/
-          cp -L ~/ffmpeg-8/lib/libavfilter.so.* dist-video/lib/
-          cp -L ~/ffmpeg-8/lib/libavdevice.so.* dist-video/lib/
-          
-          # Create symlinks for unversioned libraries
-          cd dist-video/lib
-          for lib in libavcodec libavformat libavutil libswscale libswresample libavfilter libavdevice; do
-            # Find the versioned library and create symlinks
-            fullver=$(ls ${lib}.so.*.*.* 2>/dev/null | head -n1)
-            if [ -n "$fullver" ]; then
-              majorver=$(echo $fullver | sed -E 's/(.*\.so\.[0-9]+)\..*/\1/')
-              basever="${lib}.so"
-              ln -sf $(basename $fullver) $majorver
-              ln -sf $(basename $fullver) $basever
-            fi
-          done
-          cd ../..
-          
-          # Copy docs
-          cp LICENSE README.md dist-video/
-          
-          # Verify libraries are present
-          echo "=== Bundled libraries ==="
-          ls -lh dist-video/lib/
-          
-          cd dist-video
-          tar czf ../scout-linux-x64-video.tar.gz *
-
-      - name: 🔍 Verify Package Contents
-        run: |
-          echo "=== Image-only package ==="
+          echo "=== Package contents ==="
           tar tzf scout-linux-x64.tar.gz
           ls -lh scout-linux-x64.tar.gz
-          echo ""
-          echo "=== Video package ==="
-          tar tzf scout-linux-x64-video.tar.gz
-          ls -lh scout-linux-x64-video.tar.gz
 
-      - name: 📤 Upload Image-Only
+      - name: 📤 Upload
         uses: actions/upload-artifact@v4
         with:
           name: scout-linux-x64.tar.gz
           path: scout-linux-x64.tar.gz
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: 📤 Upload Video Variant
-        uses: actions/upload-artifact@v4
-        with:
-          name: scout-linux-x64-video.tar.gz
-          path: scout-linux-x64-video.tar.gz
           if-no-files-found: error
           retention-days: 7

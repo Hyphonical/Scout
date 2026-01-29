@@ -33,72 +33,31 @@ jobs:
             target/
           key: windows-x86_64-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: 🚧 Build Image-Only
-        run: cargo build --release --target x86_64-pc-windows-msvc
-
-      - name: 🔧 Setup vcpkg for FFmpeg
-        uses: johnwason/vcpkg-action@v7
-        with:
-          pkgs: ffmpeg[core,avcodec,avformat,avdevice,avfilter,swscale,swresample]:x64-windows
-          triplet: x64-windows
-          token: ${{ github.token }}
-
-      - name: 🎥 Build with Video Support
-        run: cargo build --release --target x86_64-pc-windows-msvc --features video
-        env:
-          FFMPEG_LIBS_DIR: ${{ github.workspace }}/vcpkg/installed/x64-windows/lib
-          FFMPEG_INCLUDE_DIR: ${{ github.workspace }}/vcpkg/installed/x64-windows/include
-        continue-on-error: true
-
-      - name:  Package Image-Only
+      - name: � Install FFmpeg (for build)
         run: |
-          mkdir dist-image
-          copy target\x86_64-pc-windows-msvc\release\scout.exe dist-image\
-          copy LICENSE dist-image\
-          copy README.md dist-image\
-          cd dist-image
-          7z a -mx=9 ..\scout-windows-x64.zip *
-
-      - name: 📦 Package Video Variant (if built)
-        if: success()
-        run: |
-          if (Test-Path target\x86_64-pc-windows-msvc\release\scout.exe) {
-            mkdir dist-video\lib
-            copy target\x86_64-pc-windows-msvc\release\scout.exe dist-video\
-            
-            # Copy FFmpeg DLLs from vcpkg
-            copy vcpkg\installed\x64-windows\bin\avcodec-*.dll dist-video\lib\
-            copy vcpkg\installed\x64-windows\bin\avformat-*.dll dist-video\lib\
-            copy vcpkg\installed\x64-windows\bin\avutil-*.dll dist-video\lib\
-            copy vcpkg\installed\x64-windows\bin\swscale-*.dll dist-video\lib\
-            copy vcpkg\installed\x64-windows\bin\swresample-*.dll dist-video\lib\
-            copy vcpkg\installed\x64-windows\bin\avfilter-*.dll dist-video\lib\
-            copy vcpkg\installed\x64-windows\bin\avdevice-*.dll dist-video\lib\
-            
-            copy LICENSE dist-video\
-            copy README.md dist-video\
-            
-            echo "=== Bundled DLLs ==="  
-            Get-ChildItem dist-video\lib\ | Format-Table Name, Length
-            
-            cd dist-video
-            7z a -mx=9 ..\scout-windows-x64-video.zip *
-          }
+          choco install ffmpeg-full -y
+          $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+          ffmpeg -version
         shell: pwsh
 
-      - name: 📤 Upload Image-Only
+      - name: 🚧 Build Release
+        run: cargo build --release --target x86_64-pc-windows-msvc
+        env:
+          FFMPEG_DIR: C:\ProgramData\chocolatey\lib\ffmpeg-full\tools\ffmpeg
+
+      - name: 📦 Package
+        run: |
+          mkdir dist
+          copy target\x86_64-pc-windows-msvc\release\scout.exe dist\
+          copy LICENSE dist\
+          copy README.md dist\
+          cd dist
+          7z a -mx=9 ..\scout-windows-x64.zip *
+
+      - name: 📤 Upload
         uses: actions/upload-artifact@v4
         with:
           name: scout-windows-x64.zip
           path: scout-windows-x64.zip
           if-no-files-found: error
-          retention-days: 7
-
-      - name: 📤 Upload Video Variant (if exists)
-        if: hashFiles('scout-windows-x64-video.zip') != ''
-        uses: actions/upload-artifact@v4
-        with:
-          name: scout-windows-x64-video.zip
-          path: scout-windows-x64-video.zip
-          if-no-files-found: ignore
           retention-days: 7

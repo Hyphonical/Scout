@@ -27,6 +27,7 @@ So if you're the kind of person who has 10,000+ photos scattered across folders 
 - **Text-based search**: Find images by natural language descriptions
 - **Image-based search**: Reverse image search using a reference photo
 - **Hybrid search**: Combine text + image queries with adjustable weighting
+- **Video support**: Index video files by extracting key frames (requires FFmpeg)
 - **Live interactive mode**: TUI interface with real-time search-as-you-type
 - **Recursive scanning**: Index entire directory trees in one go
 - **Smart filtering**: Set minimum dimensions, file sizes, exclude patterns
@@ -48,27 +49,25 @@ So if you're the kind of person who has 10,000+ photos scattered across folders 
 
 ### Build from source
 
-**Image-only build (recommended for local development):**
 ```bash
 git clone https://github.com/Hyphonical/Scout.git
 cd scout
 cargo build --release
 ```
 
-**Video build (requires FFmpeg build tools, see [BUILD.md](BUILD.md)):**
-```bash
-cargo build --release --features video
-```
-
-For detailed build instructions and CI setup, see **[BUILD.md](BUILD.md)**.
+> **Note:** Building requires FFmpeg development libraries. See [BUILD.md](docs/BUILD.md) for platform-specific instructions.
 
 Binary will be at `target/release/scout` (or `scout.exe` on Windows).
 
 ### Download pre-built binaries
 
 Check the [Releases](https://github.com/Hyphonical/Scout/releases) page for pre-built binaries:
-- `scout-{platform}-x64` - Image search only (smaller, faster builds)
-- `scout-{platform}-x64-video` - Includes video frame extraction support
+- `scout-linux-x64.tar.gz` - Linux (x64)
+- `scout-macos-arm64.tar.gz` - macOS (Apple Silicon)
+- `scout-macos-x64.tar.gz` - macOS (Intel)
+- `scout-windows-x64.zip` - Windows (x64)
+
+All binaries include video support. Install FFmpeg on your system to enable video processing.
 
 ## Quick Start 🚀
 
@@ -246,6 +245,43 @@ pub const EMBEDDING_DIM: usize = 1024;  // Must match model
 
 Then rebuild: `cargo build --release`
 
+## Video Support 🎬
+
+Scout can process video files by extracting key frames and indexing them. This requires FFmpeg to be installed on your system.
+
+### Installing FFmpeg
+
+**Windows:**
+```powershell
+choco install ffmpeg-full
+# or download from https://www.gyan.dev/ffmpeg/builds/
+```
+
+**macOS:**
+```bash
+brew install ffmpeg
+```
+
+**Linux:**
+```bash
+sudo apt install ffmpeg  # Debian/Ubuntu
+sudo dnf install ffmpeg  # Fedora
+sudo pacman -S ffmpeg    # Arch
+```
+
+### Verification
+
+```bash
+ffmpeg -version  # Should show FFmpeg 4.4 or newer
+scout scan -d ~/Videos -r  # Will process videos if FFmpeg found
+```
+
+If FFmpeg is not installed, Scout will skip video files and only process images. You'll see a one-time warning message.
+
+### Supported Formats
+
+`.mp4`, `.mkv`, `.avi`, `.mov`, `.webm`, `.wmv`, `.flv`, `.m4v`
+
 ## Troubleshooting 🔧
 
 **"Vision model not found"**  
@@ -270,9 +306,8 @@ This is a weekend project that got slightly out of hand. If you find bugs or hav
 Things I'd love help with:
 - Better test coverage
 - More export formats (JSON, CSV, HTML gallery)
-- Automatic binary releases
-- Performance optimizations (workflow)
-- Video support (extract N amount of frames and index them)
+- Performance optimizations
+- UI/UX improvements for live mode
 
 ## License
 

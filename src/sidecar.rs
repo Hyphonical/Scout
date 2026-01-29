@@ -12,9 +12,6 @@ use std::path::{Path, PathBuf};
 use crate::config::{SIDECAR_DIR, SIDECAR_EXT};
 use crate::types::{Embedding, ImageHash};
 
-#[cfg(feature = "video")]
-use crate::types::MediaType;
-
 /// Computes a content-based hash using FNV-1a on first 64KB of file
 ///
 /// This provides fast deduplication and change detection without
@@ -73,7 +70,6 @@ pub struct VideoFrameData {
 	pub embedding: Vec<f32>,
 }
 
-#[cfg(feature = "video")]
 impl VideoSidecar {
 	pub fn new(filename: &str, hash: ImageHash, frames: Vec<(f64, Embedding)>, processing_ms: u64) -> Self {
 		Self {
@@ -153,14 +149,12 @@ impl ImageSidecar {
 #[derive(Debug)]
 pub enum Sidecar {
 	Image(ImageSidecar),
-	#[cfg(feature = "video")]
 	Video(VideoSidecar),
 }
 
 impl Sidecar {
 	pub fn load_auto(path: &Path) -> Result<Self> {
 		// Try video first, fall back to image
-		#[cfg(feature = "video")]
 		if let Ok(video) = VideoSidecar::load(path) {
 			return Ok(Sidecar::Video(video));
 		}
@@ -171,7 +165,6 @@ impl Sidecar {
 	pub fn is_current_version(&self) -> bool {
 		match self {
 			Sidecar::Image(img) => img.is_current_version(),
-			#[cfg(feature = "video")]
 			Sidecar::Video(vid) => vid.is_current_version(),
 		}
 	}
@@ -179,7 +172,6 @@ impl Sidecar {
 	pub fn filename(&self) -> &str {
 		match self {
 			Sidecar::Image(img) => &img.filename,
-			#[cfg(feature = "video")]
 			Sidecar::Video(vid) => &vid.filename,
 		}
 	}

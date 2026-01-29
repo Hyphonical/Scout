@@ -13,17 +13,11 @@ mod scanner;
 mod search;
 mod sidecar;
 mod types;
-
-#[cfg(feature = "video")]
 mod video;
-
-#[cfg(feature = "video")]
-mod lib;
 
 use anyhow::Result;
 use clap::{CommandFactory, Parser};
 use colored::Colorize;
-#[cfg(feature = "video")]
 use image::DynamicImage;
 use std::path::Path;
 use std::time::Instant;
@@ -35,21 +29,10 @@ use runtime::set_provider;
 use scanner::{scan_directory, ScanFilters};
 use search::{search, SearchQuery};
 use sidecar::ImageSidecar;
-#[cfg(feature = "video")]
 use sidecar::VideoSidecar;
 use types::{CombineWeight, MediaType};
 
 fn main() -> Result<()> {
-	#[cfg(feature = "video")]
-	{
-		let ffmpeg_found = lib::setup_library_paths();
-		if ffmpeg_found {
-			logger::log(logger::Level::Success, "FFmpeg libraries found");
-		} else {
-			logger::log(logger::Level::Error, "FFmpeg libraries not found");
-		}
-	}
-
 	let cli = Cli::parse();
 
 	logger::set_verbose(cli.verbose);
@@ -245,7 +228,6 @@ fn run_search(
 		let rank = format!("#{}", i + 1).bright_blue().bold();
 		let link = logger::hyperlink(name, &result.path);
 
-		#[cfg(feature = "video")]
 		if result.media_type == types::MediaType::Video {
 			if let Some(ts) = result.timestamp {
 				let timestamp = video::format_timestamp(ts);
@@ -257,9 +239,6 @@ fn run_search(
 		} else {
 			println!("  {} {} {}", rank, link, score_pct);
 		}
-
-		#[cfg(not(feature = "video"))]
-		println!("  {} {} {}", rank, link, score_pct);
 	}
 
 	if open_result && !results.is_empty() {
@@ -312,8 +291,13 @@ fn process_images(images: &[scanner::ImageEntry], models: &mut ModelManager) -> 
 					}
 				}
 			}
-			#[cfg(feature = "video")]
 			MediaType::Video => {
+				if !video::is_ffmpeg_available() {
+					video::show_ffmpeg_warning_once();
+					errors += 1;
+					continue;
+				}
+				
 				match video::extract_frames(&entry.path, 10) {
 					Ok(frames) => {
 						let mut frame_embeddings = Vec::new();
@@ -356,11 +340,6 @@ fn process_images(images: &[scanner::ImageEntry], models: &mut ModelManager) -> 
 						errors += 1;
 					}
 				}
-			}
-			#[cfg(not(feature = "video"))]
-			MediaType::Video => {
-				log(Level::Error, &format!("{} Video support not enabled (rebuild with --features video)", queue));
-				errors += 1;
 			}
 		}
 	}

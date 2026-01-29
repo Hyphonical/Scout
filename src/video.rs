@@ -1,9 +1,8 @@
 //! Video frame extraction using FFmpeg via rsmpeg
 //!
 //! Extracts evenly-spaced frames from video files for embedding generation.
-//! Uses rsmpeg (maintained FFmpeg bindings with Windows static build support).
-
-#![cfg(feature = "video")]
+//! Uses system-installed FFmpeg via rsmpeg bindings.
+//! Video support is enabled at runtime only if FFmpeg is found on the system.
 
 use anyhow::{Context, Result};
 use image::RgbImage;
@@ -17,6 +16,33 @@ use rsmpeg::{
 };
 use std::ffi::CString;
 use std::path::Path;
+use std::sync::OnceLock;
+
+static FFMPEG_AVAILABLE: OnceLock<bool> = OnceLock::new();
+static FFMPEG_WARNING_SHOWN: OnceLock<bool> = OnceLock::new();
+
+/// Checks if FFmpeg is available on the system at runtime
+pub fn is_ffmpeg_available() -> bool {
+	*FFMPEG_AVAILABLE.get_or_init(|| {
+		// Try to initialize FFmpeg by checking if we can access the version
+		// This will fail if FFmpeg libraries are not installed
+		std::panic::catch_unwind(|| {
+			unsafe { ffi::av_version_info() };
+			true
+		}).unwrap_or(false)
+	})
+}
+
+/// Shows a one-time warning that FFmpeg is not installed
+pub fn show_ffmpeg_warning_once() {
+	FFMPEG_WARNING_SHOWN.get_or_init(|| {
+		crate::logger::log(
+			crate::logger::Level::Warning,
+			"Video files found but FFmpeg not installed. Skipping videos. Install FFmpeg for video support.",
+		);
+		true
+	});
+}
 
 /// Extracts N evenly-spaced frames from a video file
 ///
@@ -27,8 +53,12 @@ use std::path::Path;
 /// # Returns
 /// Vector of tuples: (timestamp_seconds, RgbImage)
 pub fn extract_frames(video_path: &Path, count: usize) -> Result<Vec<(f64, RgbImage)>> {
+	if !is_ffmpeg_available() {
+		anyhow::bail!("FFmpeg not found. Install FFmpeg to enable video support.");
+	}
+
 	if count == 0 {
-		anyhow::bail!("Frame count must be at least 1");
+		anyhow::bail!("frame count must be at least 1");
 	}
 
 	// Open video file

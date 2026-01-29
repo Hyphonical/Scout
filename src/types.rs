@@ -129,9 +129,7 @@ impl CombineWeight {
 pub struct SearchMatch {
 	pub path: PathBuf,
 	pub score: f32,
-	#[cfg(feature = "video")]
-	pub timestamp: Option<f64>, // For videos: timestamp in seconds
-	#[cfg(feature = "video")]
+	pub timestamp: Option<f64>,
 	pub media_type: MediaType,
 }
 
@@ -140,14 +138,11 @@ impl SearchMatch {
 		Self {
 			path,
 			score,
-			#[cfg(feature = "video")]
 			timestamp: None,
-			#[cfg(feature = "video")]
 			media_type: MediaType::Image,
 		}
 	}
 
-	#[cfg(feature = "video")]
 	pub fn new_video(path: PathBuf, score: f32, timestamp: f64) -> Self {
 		Self { path, score, timestamp: Some(timestamp), media_type: MediaType::Video }
 	}
