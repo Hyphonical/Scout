@@ -17,6 +17,9 @@ mod types;
 #[cfg(feature = "video")]
 mod video;
 
+#[cfg(feature = "video")]
+mod lib;
+
 use anyhow::Result;
 use clap::{CommandFactory, Parser};
 use colored::Colorize;
@@ -37,6 +40,9 @@ use sidecar::VideoSidecar;
 use types::{CombineWeight, MediaType};
 
 fn main() -> Result<()> {
+	#[cfg(feature = "video")]
+	lib::setup_library_paths();
+
 	let cli = Cli::parse();
 
 	logger::set_verbose(cli.verbose);
