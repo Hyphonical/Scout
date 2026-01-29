@@ -33,17 +33,31 @@ jobs:
             target/
           key: windows-x86_64-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: � Install FFmpeg (for build)
+      - name: 🔧 Install Build Dependencies
         run: |
-          choco install ffmpeg-full -y
-          $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-          ffmpeg -version
+          choco install nasm -y
+          choco install pkgconfiglite -y
+        shell: pwsh
+
+      - name: 🎬 Build FFmpeg v8 from Source
+        run: |
+          $env:MSYS2_PATH_TYPE = 'inherit'
+          C:\msys64\usr\bin\bash -lc @"
+          cd /tmp
+          wget https://ffmpeg.org/releases/ffmpeg-8.0.tar.xz
+          tar xf ffmpeg-8.0.tar.xz
+          cd ffmpeg-8.0
+          ./configure --prefix=/c/ffmpeg --enable-shared --disable-static --disable-doc --disable-programs --toolchain=msvc
+          make -j`$(nproc)
+          make install
+          "@
+          echo "FFMPEG_INCLUDE_DIR=C:\ffmpeg\include" >> $env:GITHUB_ENV
+          echo "FFMPEG_LIBS_DIR=C:\ffmpeg\lib" >> $env:GITHUB_ENV
+          echo "PATH=C:\ffmpeg\bin;$env:PATH" >> $env:GITHUB_ENV
         shell: pwsh
 
       - name: 🚧 Build Release
         run: cargo build --release --target x86_64-pc-windows-msvc
-        env:
-          FFMPEG_DIR: C:\ProgramData\chocolatey\lib\ffmpeg-full\tools\ffmpeg
 
       - name: 📦 Package
         run: |
