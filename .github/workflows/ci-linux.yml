@@ -33,24 +33,42 @@ jobs:
             target/
           key: linux-x86_64-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: 🔧 Install FFmpeg Dependencies
+      - name: 🔧 Install FFmpeg Build Dependencies
         run: |
-          # Try Ubuntu's default FFmpeg first (should be 6.x on Noble/24.04)
           sudo apt-get update
-          sudo apt-get install -y ffmpeg libavcodec-dev libavformat-dev \
-                                  libavutil-dev libswscale-dev libswresample-dev \
-                                  libavdevice-dev libavfilter-dev pkg-config || {
-            # Fallback: Try FFmpeg 7 from official repositories
-            echo "Default FFmpeg failed, trying alternative sources..."
-            # Add universe repository for latest packages
-            sudo add-apt-repository universe -y
-            sudo apt-get update
-            sudo apt-get install -y ffmpeg libavcodec-dev libavformat-dev \
-                                    libavutil-dev libswscale-dev libswresample-dev \
-                                    libavdevice-dev libavfilter-dev pkg-config
-          }
-          # Verify FFmpeg version
-          ffmpeg -version | head -n1
+          sudo apt-get install -y build-essential pkg-config yasm nasm \
+                                  libx264-dev libx265-dev libvpx-dev libfdk-aac-dev \
+                                  libmp3lame-dev libopus-dev
+
+      - name: 📦 Cache FFmpeg 8
+        id: cache-ffmpeg
+        uses: actions/cache@v5
+        with:
+          path: ~/ffmpeg-8
+          key: ffmpeg-8.0-linux-${{ runner.os }}
+
+      - name: 🎬 Build FFmpeg 8 from Source
+        if: steps.cache-ffmpeg.outputs.cache-hit != 'true'
+        run: |
+          cd ~
+          wget -q https://ffmpeg.org/releases/ffmpeg-8.0.tar.xz
+          tar xf ffmpeg-8.0.tar.xz
+          cd ffmpeg-8.0
+          ./configure --prefix=$HOME/ffmpeg-8 \
+            --enable-gpl --enable-version3 --enable-nonfree \
+            --enable-shared --disable-static \
+            --enable-libx264 --enable-libx265 --enable-libvpx \
+            --enable-libfdk-aac --enable-libmp3lame --enable-libopus \
+            --disable-doc --disable-htmlpages --disable-manpages \
+            --disable-podpages --disable-txtpages
+          make -j$(nproc)
+          make install
+
+      - name: 🔗 Setup FFmpeg Environment
+        run: |
+          echo "PKG_CONFIG_PATH=$HOME/ffmpeg-8/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=$HOME/ffmpeg-8/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
+          echo "$HOME/ffmpeg-8/bin" >> $GITHUB_PATH
 
       - name: 🚧 Build Image-Only
         run: cargo build --release --target x86_64-unknown-linux-gnu

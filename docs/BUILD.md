@@ -47,47 +47,77 @@ Scout uses [rsmpeg](https://github.com/larksuite/rsmpeg) for video support, whic
 - ✅ **Actively maintained** (unlike ffmpeg-next)
 - ✅ **Windows support** (via vcpkg or system FFmpeg)
 - ✅ **FFmpeg 7.x support** (latest stable)
-- ✅ **System linking** (uses installed FFmpeg via pkg-config)
+### rsmpeg
 
-### FFmpeg Installation
+Scout uses [rsmpeg](https://github.com/larksuite/rsmpeg) 0.18 to extract frames from videos for semantic search. rsmpeg is a modern Rust wrapper around FFmpeg 8.x that provides safe, idiomatic bindings.
 
-rsmpeg uses the `link_system_ffmpeg` feature, which links against system-installed FFmpeg libraries. You must install FFmpeg development packages before building.
+**FFmpeg 8 is required** - System packages may have older versions, so we build FFmpeg 8 from source in CI to ensure compatibility.
+
+### Building FFmpeg 8 from Source
 
 **Ubuntu/Debian:**
 ```bash
+# Install build dependencies
 sudo apt-get update
-sudo apt-get install -y libavcodec-dev libavformat-dev libavutil-dev \
-                        libswscale-dev libswresample-dev libavdevice-dev \
-                        libavfilter-dev pkg-config
+sudo apt-get install -y build-essential pkg-config yasm nasm \
+                        libx264-dev libx265-dev libvpx-dev libfdk-aac-dev \
+                        libmp3lame-dev libopus-dev
+
+# Download and build FFmpeg 8
+wget https://ffmpeg.org/releases/ffmpeg-8.0.tar.xz
+tar xf ffmpeg-8.0.tar.xz
+cd ffmpeg-8.0
+./configure --prefix=$HOME/ffmpeg-8 \
+  --enable-gpl --enable-version3 --enable-nonfree \
+  --enable-shared --disable-static \
+  --enable-libx264 --enable-libx265 --enable-libvpx \
+  --enable-libfdk-aac --enable-libmp3lame --enable-libopus
+make -j$(nproc)
+make install
+
+# Set environment variables
+export PKG_CONFIG_PATH="$HOME/ffmpeg-8/lib/pkgconfig:$PKG_CONFIG_PATH"
+export LD_LIBRARY_PATH="$HOME/ffmpeg-8/lib:$LD_LIBRARY_PATH"
+export PATH="$HOME/ffmpeg-8/bin:$PATH"
 ```
 
 **macOS:**
 ```bash
-brew install ffmpeg pkg-config
-export PKG_CONFIG_PATH="$(brew --prefix ffmpeg)/lib/pkgconfig:$PKG_CONFIG_PATH"
+# Install build dependencies
+brew install pkg-config yasm nasm x264 x265 libvpx fdk-aac lame opus
+
+# Download and build FFmpeg 8
+wget https://ffmpeg.org/releases/ffmpeg-8.0.tar.xz
+tar xf ffmpeg-8.0.tar.xz
+cd ffmpeg-8.0
+./configure --prefix=$HOME/ffmpeg-8 \
+  --enable-gpl --enable-version3 --enable-nonfree \
+  --enable-shared --disable-static \
+  --enable-libx264 --enable-libx265 --enable-libvpx \
+  --enable-libfdk-aac --enable-libmp3lame --enable-libopus
+make -j$(sysctl -n hw.ncpu)
+make install
+
+# Set environment variables
+export PKG_CONFIG_PATH="$HOME/ffmpeg-8/lib/pkgconfig:$PKG_CONFIG_PATH"
+export DYLD_LIBRARY_PATH="$HOME/ffmpeg-8/lib:$DYLD_LIBRARY_PATH"
+export PATH="$HOME/ffmpeg-8/bin:$PATH"
 ```
 
 **Windows:**
-```bash
-# Option 1: vcpkg (recommended)
-vcpkg install ffmpeg:x64-windows
+Video support is optional on Windows. You can use vcpkg or pre-built FFmpeg 8 binaries.
 
-# Option 2: Chocolatey
-choco install ffmpeg
-```
-
-Then build with:
+Then build Scout with:
 ```bash
 cargo build --release --features video
 ```
 
-### Why System FFmpeg?
+### Why Build FFmpeg 8 from Source?
 
-- ✅ **Fast builds** (~2-5 minutes vs 30+ for compiling FFmpeg)
-- ✅ **Smaller binaries** (dynamically linked)
-- ✅ **OS-optimized** (uses system codecs and hardware acceleration)
-- ✅ **Easy updates** (update FFmpeg separately via package manager)
-- ⚠️ **Runtime dependency** (users need FFmpeg installed)
+- ✅ **Guaranteed compatibility** - rsmpeg 0.18 requires FFmpeg 8.x APIs
+- ✅ **CI caching** - Build once, cache for future runs (~2-5 min on cache hit)
+- ✅ **Latest features** - FFmpeg 8 has improved codecs and performance
+- ⚠️ **Initial build time** - First build takes ~30 minutes (cached afterward)
 
 ## 🤖 CI/CD Builds
 
