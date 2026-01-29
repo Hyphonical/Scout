@@ -44,63 +44,49 @@ cargo build --release --features video
 ### rsmpeg: Modern FFmpeg Bindings
 
 Scout uses [rsmpeg](https://github.com/larksuite/rsmpeg) for video support, which provides:
-- ✅ **Actively maintained**
-- ✅ **Windows static builds** (works out of the box)
+- ✅ **Actively maintained** (unlike ffmpeg-next)
+- ✅ **Windows support** (via vcpkg or system FFmpeg)
 - ✅ **FFmpeg 7.x support** (latest stable)
-- ✅ **Flexible linking** (static, system, vcpkg)
+- ✅ **System linking** (uses installed FFmpeg via pkg-config)
 
-### FFmpeg Build/Installation Options
+### FFmpeg Installation
 
-**Option 1: Let rsmpeg compile FFmpeg (CI/Linux/macOS)**
+rsmpeg uses the `link_system_ffmpeg` feature, which links against system-installed FFmpeg libraries. You must install FFmpeg development packages before building.
 
-Default behavior when building with `--features video`:
-```bash
-cargo build --release --features video
-```
-
-Requirements:
-- Build essentials: `gcc`, `make`, `cmake`
-- `nasm` or `yasm` (assembly optimizer)
-- `pkg-config`
-- ~10-30 minutes build time (grab a coffee!)
-
-**Install on Ubuntu/Debian:**
+**Ubuntu/Debian:**
 ```bash
 sudo apt-get update
-sudo apt-get install -y build-essential cmake nasm pkg-config
+sudo apt-get install -y libavcodec-dev libavformat-dev libavutil-dev \
+                        libswscale-dev libswresample-dev libavdevice-dev \
+                        libavfilter-dev pkg-config
 ```
 
-**Install on macOS:**
+**macOS:**
 ```bash
-brew install cmake nasm pkg-config
+brew install ffmpeg pkg-config
 ```
 
-**Option 2: Use system FFmpeg (fastest for development)**
-
-If you have FFmpeg 4.4+ installed:
+**Windows:**
 ```bash
-# Install FFmpeg first
-# Ubuntu/Debian:
-sudo apt-get install -y libavcodec-dev libavformat-dev libavutil-dev libswscale-dev
-
-# macOS:
-brew install ffmpeg
-
-# Then build Scout
-cargo build --release --features video
-```
-
-rsmpeg will automatically detect and use system FFmpeg.
-
-**Option 3: Use vcpkg (Windows)**
-
-```bash
+# Option 1: vcpkg (recommended)
 vcpkg install ffmpeg:x64-windows
+
+# Option 2: Chocolatey
+choco install ffmpeg
+```
+
+Then build with:
+```bash
 cargo build --release --features video
 ```
 
-**Windows Note:**
-Static FFmpeg builds work on Windows with rsmpeg. However, it's still easier to use CI for Windows builds or install FFmpeg via vcpkg/chocolatey.
+### Why System FFmpeg?
+
+- ✅ **Fast builds** (~2-5 minutes vs 30+ for compiling FFmpeg)
+- ✅ **Smaller binaries** (dynamically linked)
+- ✅ **OS-optimized** (uses system codecs and hardware acceleration)
+- ✅ **Easy updates** (update FFmpeg separately via package manager)
+- ⚠️ **Runtime dependency** (users need FFmpeg installed)
 
 ## 🤖 CI/CD Builds
 
@@ -134,8 +120,9 @@ cargo run --release -- search "your query"
 
 Scout uses Cargo feature flags for optional functionality:
 
-- **`video`** (opt-in): Enables video support via FFmpeg
-  - Compiles FFmpeg from source with static linking
-  - Wraps all video code in `#[cfg(feature = "video")]`
+- **`video`** (opt-in): Enables video support via rsmpeg
+  - Links against system FFmpeg via `link_system_ffmpeg` feature
+  - Requires FFmpeg development libraries installed
+  - All video code wrapped in `#[cfg(feature = "video")]`
 
 By default, no optional features are enabled, resulting in a fast-building image-only binary.

@@ -34,7 +34,7 @@ jobs:
           key: macos-aarch64-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: 🔧 Install FFmpeg Dependencies
-        run: brew install cmake nasm pkg-config
+        run: brew install ffmpeg pkg-config
 
       - name: 🚧 Build Image-Only
         run: cargo build --release --target aarch64-apple-darwin
