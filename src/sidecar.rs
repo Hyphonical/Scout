@@ -112,21 +112,6 @@ impl VideoSidecar {
 			.map(|f| (f.timestamp_secs, Embedding::raw(f.embedding.clone())))
 			.collect()
 	}
-
-	pub fn load(path: &Path) -> Result<Self> {
-		let bytes = fs::read(path).context("Failed to read video sidecar")?;
-		rmp_serde::from_slice(&bytes).context("Failed to deserialize video sidecar")
-	}
-
-	pub fn is_current_version(&self) -> bool {
-		self.version == current_version()
-	}
-
-	pub fn frames(&self) -> Vec<(f64, Embedding)> {
-		self.frames.iter()
-			.map(|f| (f.timestamp_secs, Embedding::raw(f.embedding.clone())))
-			.collect()
-	}
 }
 
 impl ImageSidecar {

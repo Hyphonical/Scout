@@ -20,6 +20,8 @@ mod video;
 use anyhow::Result;
 use clap::{CommandFactory, Parser};
 use colored::Colorize;
+#[cfg(feature = "video")]
+use image::DynamicImage;
 use std::path::Path;
 use std::time::Instant;
 
@@ -147,7 +149,7 @@ fn run_scan(directory: &Path, recursive: bool, force: bool, filters: &ScanFilter
 	log(Level::Success, &format!("Model ready in {:.2}s", load_start.elapsed().as_secs_f32()));
 
 	let process_start = Instant::now();
-	let (processed, errors) = process_images(&scan.to_process, &mut models);
+	let (processed, errors) = process_images(&scan.to_process, &mut models)?;
 
 	summary(
 		processed,
@@ -259,7 +261,7 @@ fn run_search(
 	Ok(())
 }
 
-fn process_images(images: &[scanner::ImageEntry], models: &mut ModelManager) -> (usize, usize) {
+fn process_images(images: &[scanner::ImageEntry], models: &mut ModelManager) -> Result<(usize, usize)> {
 	let total = images.len();
 	let mut processed = 0;
 	let mut errors = 0;
@@ -299,14 +301,14 @@ fn process_images(images: &[scanner::ImageEntry], models: &mut ModelManager) -> 
 			}
 			#[cfg(feature = "video")]
 			MediaType::Video => {
-				match video::extract_frames(&entry.path, None) {
+				match video::extract_frames(&entry.path, 10) {
 					Ok(frames) => {
 						let mut frame_embeddings = Vec::new();
 						
-						for frame in frames {
-							match models.encode_image_from_dynamic(&frame.image) {
+						for (timestamp_secs, image) in frames {
+							match models.encode_image_from_dynamic(&DynamicImage::ImageRgb8(image)) {
 								Ok((emb, _)) => {
-									frame_embeddings.push((frame.timestamp_secs, emb));
+									frame_embeddings.push((timestamp_secs, emb));
 								}
 								Err(e) => {
 									log(Level::Warning, &format!("{} Frame extraction error: {}", queue, e));
@@ -350,7 +352,7 @@ fn process_images(images: &[scanner::ImageEntry], models: &mut ModelManager) -> 
 		}
 	}
 
-	(processed, errors)
+	Ok((processed, errors))
 }
 
 fn run_clean(directory: &Path, recursive: bool, auto_confirm: bool) -> Result<()> {

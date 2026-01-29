@@ -64,6 +64,7 @@ sudo apt-get install -y libavcodec-dev libavformat-dev libavutil-dev \
 **macOS:**
 ```bash
 brew install ffmpeg pkg-config
+export PKG_CONFIG_PATH="$(brew --prefix ffmpeg)/lib/pkgconfig:$PKG_CONFIG_PATH"
 ```
 
 **Windows:**

@@ -144,7 +144,7 @@ fn frame_to_rgb(frame: &AVFrame, decode_ctx: &AVCodecContext) -> Result<RgbImage
 	let buffer_size = (dst_linesize * height as i32) as usize;
 	let mut rgb_data = vec![0u8; buffer_size];
 
-	// Initialize swscale context
+	// Initialize swscale context with all 10 parameters
 	let mut sws_ctx = SwsContext::get_context(
 		decode_ctx.width,
 		decode_ctx.height,
@@ -153,23 +153,33 @@ fn frame_to_rgb(frame: &AVFrame, decode_ctx: &AVCodecContext) -> Result<RgbImage
 		decode_ctx.height,
 		ffi::AV_PIX_FMT_RGB24,
 		ffi::SWS_BILINEAR,
+		None, // src_filter
+		None, // dst_filter
+		None, // param
 	)
 	.context("Failed to initialize swscale context")?;
 
-	// Convert frame to RGB24
-	let dst_data = [rgb_data.as_mut_ptr(), std::ptr::null_mut(), std::ptr::null_mut(), std::ptr::null_mut()];
-	let dst_linesize = [dst_linesize, 0, 0, 0];
+	// Create destination frame for RGB24
+	let mut dst_frame = AVFrame::new();
+	dst_frame.set_format(ffi::AV_PIX_FMT_RGB24);
+	dst_frame.set_width(decode_ctx.width);
+	dst_frame.set_height(decode_ctx.height);
+	dst_frame.alloc_buffer().context("Failed to allocate destination frame buffer")?;
 
-	unsafe {
-		sws_ctx.scale_frame(
-			frame.data.as_ptr() as *const *const u8,
-			frame.linesize.as_ptr(),
-			0,
-			decode_ctx.height,
-			dst_data.as_ptr() as *const *mut u8,
-			dst_linesize.as_ptr(),
-		)
+	// Convert frame to RGB24
+	sws_ctx.scale_frame(&frame, 0, decode_ctx.height, &mut dst_frame)
 		.context("Failed to scale frame")?;
+
+	// Copy RGB data from dst_frame
+	let line_size = dst_frame.linesize[0] as usize;
+	let expected_line_size = (width * 3) as usize;
+	unsafe {
+		let src_ptr = dst_frame.data[0];
+		for y in 0..height as usize {
+			let src_row = std::slice::from_raw_parts(src_ptr.add(y * line_size), expected_line_size);
+			let dst_row = &mut rgb_data[y * expected_line_size..(y + 1) * expected_line_size];
+			dst_row.copy_from_slice(src_row);
+		}
 	}
 
 	// Create RgbImage from buffer
