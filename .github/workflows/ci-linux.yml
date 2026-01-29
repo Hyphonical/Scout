@@ -104,14 +104,28 @@ jobs:
           # Copy the scout binary (built with video support)
           cp target/x86_64-unknown-linux-gnu/release/scout dist-video/
           
-          # Copy ALL FFmpeg shared libraries to lib/
-          cp -P ~/ffmpeg-8/lib/libavcodec.so* dist-video/lib/
-          cp -P ~/ffmpeg-8/lib/libavformat.so* dist-video/lib/
-          cp -P ~/ffmpeg-8/lib/libavutil.so* dist-video/lib/
-          cp -P ~/ffmpeg-8/lib/libswscale.so* dist-video/lib/
-          cp -P ~/ffmpeg-8/lib/libswresample.so* dist-video/lib/
-          cp -P ~/ffmpeg-8/lib/libavfilter.so* dist-video/lib/
-          cp -P ~/ffmpeg-8/lib/libavdevice.so* dist-video/lib/
+          # Copy FFmpeg shared libraries to lib/ (dereference symlinks with -L)
+          cp -L ~/ffmpeg-8/lib/libavcodec.so.* dist-video/lib/
+          cp -L ~/ffmpeg-8/lib/libavformat.so.* dist-video/lib/
+          cp -L ~/ffmpeg-8/lib/libavutil.so.* dist-video/lib/
+          cp -L ~/ffmpeg-8/lib/libswscale.so.* dist-video/lib/
+          cp -L ~/ffmpeg-8/lib/libswresample.so.* dist-video/lib/
+          cp -L ~/ffmpeg-8/lib/libavfilter.so.* dist-video/lib/
+          cp -L ~/ffmpeg-8/lib/libavdevice.so.* dist-video/lib/
+          
+          # Create symlinks for unversioned libraries
+          cd dist-video/lib
+          for lib in libavcodec libavformat libavutil libswscale libswresample libavfilter libavdevice; do
+            # Find the versioned library and create symlinks
+            fullver=$(ls ${lib}.so.*.*.* 2>/dev/null | head -n1)
+            if [ -n "$fullver" ]; then
+              majorver=$(echo $fullver | sed -E 's/(.*\.so\.[0-9]+)\..*/\1/')
+              basever="${lib}.so"
+              ln -sf $(basename $fullver) $majorver
+              ln -sf $(basename $fullver) $basever
+            fi
+          done
+          cd ../..
           
           # Copy docs
           cp LICENSE README.md dist-video/

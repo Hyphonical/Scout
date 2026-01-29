@@ -8,12 +8,13 @@ use std::path::PathBuf;
 
 /// Sets up library search paths for FFmpeg libraries in the lib/ directory
 /// next to the executable. Call this before any FFmpeg usage.
-pub fn setup_library_paths() {
+/// Returns true if FFmpeg libraries were found and configured.
+pub fn setup_library_paths() -> bool {
 	if let Ok(exe_path) = env::current_exe() {
 		if let Some(exe_dir) = exe_path.parent() {
 			let lib_dir = exe_dir.join("lib");
 
-			if lib_dir.exists() {
+			if lib_dir.exists() && lib_dir.is_dir() {
 				#[cfg(target_os = "linux")]
 				{
 					// Add lib/ to LD_LIBRARY_PATH
@@ -52,7 +53,10 @@ pub fn setup_library_paths() {
 					};
 					env::set_var("PATH", new_path);
 				}
+				
+				return true;
 			}
 		}
 	}
+	false
 }

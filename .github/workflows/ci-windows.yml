@@ -45,6 +45,9 @@ jobs:
 
       - name: 🎥 Build with Video Support
         run: cargo build --release --target x86_64-pc-windows-msvc --features video
+        env:
+          FFMPEG_LIBS_DIR: ${{ github.workspace }}/vcpkg/installed/x64-windows/lib
+          FFMPEG_INCLUDE_DIR: ${{ github.workspace }}/vcpkg/installed/x64-windows/include
         continue-on-error: true
 
       - name: 🔩 Compress with UPX (Image-Only)
@@ -67,10 +70,24 @@ jobs:
         if: success()
         run: |
           if (Test-Path target\x86_64-pc-windows-msvc\release\scout.exe) {
-            mkdir dist-video
+            mkdir dist-video\lib
             copy target\x86_64-pc-windows-msvc\release\scout.exe dist-video\
+            
+            # Copy FFmpeg DLLs from vcpkg
+            copy vcpkg\installed\x64-windows\bin\avcodec-*.dll dist-video\lib\
+            copy vcpkg\installed\x64-windows\bin\avformat-*.dll dist-video\lib\
+            copy vcpkg\installed\x64-windows\bin\avutil-*.dll dist-video\lib\
+            copy vcpkg\installed\x64-windows\bin\swscale-*.dll dist-video\lib\
+            copy vcpkg\installed\x64-windows\bin\swresample-*.dll dist-video\lib\
+            copy vcpkg\installed\x64-windows\bin\avfilter-*.dll dist-video\lib\
+            copy vcpkg\installed\x64-windows\bin\avdevice-*.dll dist-video\lib\
+            
             copy LICENSE dist-video\
             copy README.md dist-video\
+            
+            echo "=== Bundled DLLs ==="  
+            Get-ChildItem dist-video\lib\ | Format-Table Name, Length
+            
             cd dist-video
             7z a -mx=9 ..\scout-windows-x64-video.zip *
           }

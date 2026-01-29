@@ -41,7 +41,14 @@ use types::{CombineWeight, MediaType};
 
 fn main() -> Result<()> {
 	#[cfg(feature = "video")]
-	lib::setup_library_paths();
+	{
+		let ffmpeg_found = lib::setup_library_paths();
+		if ffmpeg_found {
+			logger::log(logger::Level::Success, "FFmpeg libraries found");
+		} else {
+			logger::log(logger::Level::Error, "FFmpeg libraries not found");
+		}
+	}
 
 	let cli = Cli::parse();
 
