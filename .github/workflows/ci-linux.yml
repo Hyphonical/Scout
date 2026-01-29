@@ -35,11 +35,22 @@ jobs:
 
       - name: 🔧 Install FFmpeg Dependencies
         run: |
-          sudo add-apt-repository ppa:savoury1/ffmpeg6 -y
+          # Try Ubuntu's default FFmpeg first (should be 6.x on Noble/24.04)
           sudo apt-get update
           sudo apt-get install -y ffmpeg libavcodec-dev libavformat-dev \
                                   libavutil-dev libswscale-dev libswresample-dev \
-                                  libavdevice-dev libavfilter-dev pkg-config
+                                  libavdevice-dev libavfilter-dev pkg-config || {
+            # Fallback: Try FFmpeg 7 from official repositories
+            echo "Default FFmpeg failed, trying alternative sources..."
+            # Add universe repository for latest packages
+            sudo add-apt-repository universe -y
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg libavcodec-dev libavformat-dev \
+                                    libavutil-dev libswscale-dev libswresample-dev \
+                                    libavdevice-dev libavfilter-dev pkg-config
+          }
+          # Verify FFmpeg version
+          ffmpeg -version | head -n1
 
       - name: 🚧 Build Image-Only
         run: cargo build --release --target x86_64-unknown-linux-gnu
