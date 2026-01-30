@@ -12,7 +12,8 @@ env:
 jobs:
   build:
     name: 🚧 Linux x86_64
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
+
     steps:
       - name: 📥 Checkout
         uses: actions/checkout@v6
@@ -33,35 +34,24 @@ jobs:
             target/
           key: linux-x86_64-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: 🔧 Install Build Dependencies
+      - name: 🔧 Install FFmpeg 6 and Build Dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            pkg-config clang build-essential yasm nasm cmake git
+          sudo add-apt-repository ppa:ubuntuhandbook1/ffmpeg6 -y
+          sudo apt update
+          sudo apt install -y \
+            pkg-config \
+            libavcodec-dev \
+            libavformat-dev \
+            libavutil-dev \
+            libavfilter-dev \
+            libavdevice-dev \
+            libswscale-dev \
+            libswresample-dev \
+            clang \
+            llvm
 
-      - name: 📥 Build FFmpeg 6 from Source
-        run: |
-          mkdir -p $HOME/ffmpeg_build
-          cd $HOME
-          wget https://ffmpeg.org/releases/ffmpeg-6.0.tar.bz2
-          tar xf ffmpeg-6.0.tar.bz2
-          cd ffmpeg-6.0
-          ./configure \
-            --prefix=$HOME/ffmpeg_build \
-            --disable-shared \
-            --enable-static \
-            --disable-doc \
-            --disable-debug \
-            --disable-x86asm
-          make -j$(nproc)
-          make install
-
-      - name: 🚧 Build Scout with rsmpeg
-        env:
-          FFMPEG_LIBS_DIR: $HOME/ffmpeg_build/lib
-          FFMPEG_INCLUDE_DIR: $HOME/ffmpeg_build/include
-        run: |
-          cargo build --release --features video --target x86_64-unknown-linux-gnu
+      - name: 🚧 Build Release
+        run: cargo build --release --features video --target x86_64-unknown-linux-gnu
 
       - name: 📦 Package
         run: |
@@ -70,12 +60,6 @@ jobs:
           cp LICENSE README.md dist/
           cd dist
           tar czf ../scout-linux-x64.tar.gz *
-
-      - name: 🔍 Verify Package
-        run: |
-          echo "=== Package contents ==="
-          tar tzf scout-linux-x64.tar.gz
-          ls -lh scout-linux-x64.tar.gz
 
       - name: 📤 Upload
         uses: actions/upload-artifact@v4
