@@ -33,8 +33,9 @@ use sidecar::VideoSidecar;
 use types::{CombineWeight, MediaType};
 
 #[cfg(target_os = "windows")]
-fn setup_dll_directory() {
+fn setup_dll_directory() -> Result<()> {
 	use std::env;
+	use windows_sys::Win32::System::LibraryLoader::SetDllDirectoryW;
 	
 	if let Ok(exe_path) = env::current_exe() {
 		if let Some(exe_dir) = exe_path.parent() {
@@ -45,14 +46,24 @@ fn setup_dll_directory() {
 					let new_path = format!("{};{}", lib_dir.display(), current_path);
 					env::set_var("PATH", new_path);
 				}
+				
+				// Also set DLL directory for immediate loading
+				let lib_dir_str = format!("{}\0", lib_dir.display());
+				let wide: Vec<u16> = lib_dir_str.encode_utf16().collect();
+				unsafe {
+					SetDllDirectoryW(wide.as_ptr());
+				}
 			}
 		}
 	}
+	Ok(())
 }
 
 fn main() -> Result<()> {
 	#[cfg(target_os = "windows")]
-	setup_dll_directory();
+	if let Err(e) = setup_dll_directory() {
+		eprintln!("Warning: Failed to setup DLL directory: {}", e);
+	}
 
 	let cli = Cli::parse();
 

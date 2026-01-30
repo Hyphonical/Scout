@@ -13,16 +13,6 @@ use std::sync::OnceLock;
 use anyhow::Context;
 
 #[cfg(feature = "video")]
-use rsmpeg::{
-	avcodec::AVCodecContext,
-	avformat::AVFormatContextInput,
-	avutil::AVFrame,
-	error::RsmpegError,
-	ffi,
-	swscale::SwsContext,
-};
-
-#[cfg(feature = "video")]
 use std::ffi::CString;
 
 #[cfg(feature = "video")]
@@ -63,10 +53,19 @@ pub fn is_ffmpeg_available() -> bool {
 	*FFMPEG_AVAILABLE.get_or_init(|| {
 		// Try to initialize FFmpeg by checking if we can access the version
 		// This will fail if FFmpeg libraries are not installed
-		std::panic::catch_unwind(|| {
-			unsafe { ffi::av_version_info() };
-			true
-		}).unwrap_or(false)
+		match std::panic::catch_unwind(|| {
+			use rsmpeg::ffi;
+			unsafe { 
+				let version = ffi::av_version_info();
+				!version.is_null()
+			}
+		}) {
+			Ok(result) => result,
+			Err(_) => {
+				eprintln!("Warning: FFmpeg libraries not found or failed to load");
+				false
+			}
+		}
 	})
 }
 
@@ -104,6 +103,13 @@ pub fn show_ffmpeg_warning_once() {
 /// # Returns
 /// Vector of tuples: (timestamp_seconds, RgbImage)
 pub fn extract_frames(video_path: &Path, count: usize) -> Result<Vec<(f64, RgbImage)>> {
+	use rsmpeg::{
+		avcodec::AVCodecContext,
+		avformat::AVFormatContextInput,
+		error::RsmpegError,
+		ffi,
+	};
+	
 	if !is_ffmpeg_available() {
 		anyhow::bail!("FFmpeg not found. Install FFmpeg to enable video support.");
 	}
@@ -223,7 +229,9 @@ pub fn extract_frames(_video_path: &Path, _count: usize) -> Result<Vec<(f64, Rgb
 
 /// Converts an AVFrame to RgbImage using swscale
 #[cfg(feature = "video")]
-fn frame_to_rgb(frame: &AVFrame, decode_ctx: &AVCodecContext) -> Result<RgbImage> {
+fn frame_to_rgb(frame: &rsmpeg::avutil::AVFrame, decode_ctx: &rsmpeg::avcodec::AVCodecContext) -> Result<RgbImage> {
+	use rsmpeg::{avutil::AVFrame, swscale::SwsContext, ffi};
+	
 	let width = decode_ctx.width as u32;
 	let height = decode_ctx.height as u32;
 
