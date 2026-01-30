@@ -35,14 +35,15 @@ jobs:
 
       - name: 🔧 Install FFmpeg 6
         run: |
+          sudo add-apt-repository -y ppa:savoury1/ffmpeg6
           sudo apt-get update
           sudo apt-get install -y \
-            ffmpeg=6:* \
-            libavcodec-dev=6:* \
-            libavformat-dev=6:* \
-            libavutil-dev=6:* \
-            libswscale-dev=6:* \
-            libavdevice-dev=6:*
+            ffmpeg \
+            libavcodec-dev \
+            libavformat-dev \
+            libavutil-dev \
+            libswscale-dev \
+            libavdevice-dev
 
       - name: 🚧 Build Release
         run: cargo build --release --features video --target x86_64-unknown-linux-gnu
