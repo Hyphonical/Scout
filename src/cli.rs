@@ -82,9 +82,6 @@ pub struct Cli {
 	#[arg(short = 'p', long = "provider", global = true, default_value = "auto")]
 	pub provider: Provider,
 
-	#[arg(long = "disable-video", global = true, help = "Disable video processing even if compiled with video support")]
-	pub disable_video: bool,
-
 	#[command(subcommand)]
 	pub command: Command,
 }

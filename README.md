@@ -44,18 +44,19 @@ So if you're the kind of person who has 10,000+ photos scattered across folders 
 ### Prerequisites
 
 1. **Rust** (1.70+): Install from [rustup.rs](https://rustup.rs)
-2. **ONNX Runtime models**: See [models/Models.md](models/Models.md) for download instructions
-3. **CUDA/TensorRT DLLs** (NVIDIA GPU only): [ONNX Runtime GPU setup](https://onnxruntime.ai/docs/execution-providers/CUDA-ExecutionProvider.html)
+2. **FFmpeg** (6.x+): Required for video support - [Installation Guide](docs/INSTALL_FFMPEG.md)
+3. **ONNX Runtime models**: See [models/Models.md](models/Models.md) for download instructions
+4. **CUDA/TensorRT DLLs** (NVIDIA GPU only): [ONNX Runtime GPU setup](https://onnxruntime.ai/docs/execution-providers/CUDA-ExecutionProvider.html)
 
 ### Build from source
 
 ```bash
 git clone https://github.com/Hyphonical/Scout.git
 cd scout
-cargo build --release
+cargo build --release --features video
 ```
 
-> **Note:** Building requires FFmpeg development libraries. See [BUILD.md](docs/BUILD.md) for platform-specific instructions.
+> **Note:** Building with video support requires FFmpeg development libraries. See [BUILD.md](docs/BUILD.md) for platform-specific instructions.
 
 Binary will be at `target/release/scout` (or `scout.exe` on Windows).
 
@@ -64,10 +65,9 @@ Binary will be at `target/release/scout` (or `scout.exe` on Windows).
 Check the [Releases](https://github.com/Hyphonical/Scout/releases) page for pre-built binaries:
 - `scout-linux-x64.tar.gz` - Linux (x64)
 - `scout-macos-arm64.tar.gz` - macOS (Apple Silicon)
-- `scout-macos-x64.tar.gz` - macOS (Intel)
 - `scout-windows-x64.zip` - Windows (x64)
 
-All binaries include video support. Install FFmpeg on your system to enable video processing.
+**All binaries require FFmpeg to be installed on your system for video support.** See [Installation Guide](docs/INSTALL_FFMPEG.md).
 
 ## Quick Start 🚀
 

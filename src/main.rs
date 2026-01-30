@@ -32,44 +32,12 @@ use sidecar::ImageSidecar;
 use sidecar::VideoSidecar;
 use types::{CombineWeight, MediaType};
 
-#[cfg(target_os = "windows")]
-fn setup_dll_directory() -> Result<()> {
-	use std::env;
-	use windows_sys::Win32::System::LibraryLoader::SetDllDirectoryW;
-	
-	if let Ok(exe_path) = env::current_exe() {
-		if let Some(exe_dir) = exe_path.parent() {
-			let lib_dir = exe_dir.join("lib");
-			if lib_dir.exists() {
-				// Add lib directory to PATH environment variable
-				if let Ok(current_path) = env::var("PATH") {
-					let new_path = format!("{};{}", lib_dir.display(), current_path);
-					env::set_var("PATH", new_path);
-				}
-				
-				// Also set DLL directory for immediate loading
-				let lib_dir_str = format!("{}\0", lib_dir.display());
-				let wide: Vec<u16> = lib_dir_str.encode_utf16().collect();
-				unsafe {
-					SetDllDirectoryW(wide.as_ptr());
-				}
-			}
-		}
-	}
-	Ok(())
-}
-
 fn main() -> Result<()> {
-	#[cfg(target_os = "windows")]
-	if let Err(e) = setup_dll_directory() {
-		eprintln!("Warning: Failed to setup DLL directory: {}", e);
-	}
 
 	let cli = Cli::parse();
 
 	logger::set_verbose(cli.verbose);
 	set_provider(cli.provider);
-	video::set_video_disabled(cli.disable_video);
 
 	match cli.command {
 		Command::Scan {
@@ -332,12 +300,7 @@ fn process_images(images: &[scanner::ImageEntry], models: &mut ModelManager) -> 
 				}
 			}
 			MediaType::Video => {
-				if !video::is_ffmpeg_available() {
-					video::show_ffmpeg_warning_once();
-					errors += 1;
-					continue;
-				}
-				
+				// Try to extract frames, will fail with clear message if FFmpeg not installed
 				match video::extract_frames(&entry.path, 10) {
 					Ok(frames) => {
 						let mut frame_embeddings = Vec::new();

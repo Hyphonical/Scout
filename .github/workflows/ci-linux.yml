@@ -50,42 +50,23 @@ jobs:
             clang \
             llvm
 
-      # Build WITHOUT video feature
-      - name: 🚧 Build Release (No Video)
-        run: cargo build --release --target x86_64-unknown-linux-gnu
+      # Build WITH video feature (only variant)
+      - name: 🚧 Build Release
+        run: cargo build --release --features video --target x86_64-unknown-linux-gnu
 
-      - name: 📦 Package (No Video)
+      - name: 📦 Package
         run: |
           mkdir -p dist
           cp target/x86_64-unknown-linux-gnu/release/scout dist/
           cp LICENSE README.md dist/
+          cp docs/INSTALL_FFMPEG.md dist/
           cd dist
           tar czf ../scout-linux-x64.tar.gz *
 
-      - name: 📤 Upload (No Video)
+      - name: 📤 Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: scout-linux-x64.tar.gz
           path: scout-linux-x64.tar.gz
-          if-no-files-found: error
-          retention-days: 7
-
-      # Build WITH video feature
-      - name: 🚧 Build Release (With Video)
-        run: cargo build --release --features video --target x86_64-unknown-linux-gnu
-
-      - name: 📦 Package (With Video)
-        run: |
-          mkdir -p dist-video
-          cp target/x86_64-unknown-linux-gnu/release/scout dist-video/
-          cp LICENSE README.md dist-video/
-          cd dist-video
-          tar czf ../scout-linux-x64-video.tar.gz *
-
-      - name: 📤 Upload (With Video)
-        uses: actions/upload-artifact@v4
-        with:
-          name: scout-linux-x64-video.tar.gz
-          path: scout-linux-x64-video.tar.gz
           if-no-files-found: error
           retention-days: 7

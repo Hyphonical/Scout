@@ -164,12 +164,7 @@ pub fn scan_directory(
 				skipped_videos += 1;
 				continue;
 			}
-			// Check if FFmpeg is available at runtime
-			if !video::is_ffmpeg_available() {
-				video::show_ffmpeg_warning_once();
-				skipped_videos += 1;
-				continue;
-			}
+			// Video processing will fail gracefully if FFmpeg is not installed
 			MediaType::Video
 		} else {
 			continue

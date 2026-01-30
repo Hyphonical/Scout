@@ -50,48 +50,26 @@ jobs:
           echo "C:\PROGRA~1\ffmpeg\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
         shell: pwsh
 
-      # Build WITHOUT video feature
-      - name: 🚧 Build Release (No Video)
-        run: cargo build --release --target x86_64-pc-windows-msvc
+      # Build WITH video feature (only variant)
+      - name: 🚧 Build Release
+        run: cargo build --release --features video --target x86_64-pc-windows-msvc
+        env:
+          RUSTFLAGS: -L C:\PROGRA~1\ffmpeg\lib
 
-      - name: 📦 Package (No Video)
+      - name: 📦 Package
         run: |
           mkdir dist
           copy target\x86_64-pc-windows-msvc\release\scout.exe dist\
           copy LICENSE dist\
           copy README.md dist\
+          copy docs\INSTALL_FFMPEG.md dist\
           cd dist
           7z a -mx=9 ..\scout-windows-x64.zip *
 
-      - name: 📤 Upload (No Video)
+      - name: 📤 Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: scout-windows-x64.zip
           path: scout-windows-x64.zip
-          if-no-files-found: error
-          retention-days: 7
-
-      # Build WITH video feature
-      - name: 🚧 Build Release (With Video)
-        run: cargo build --release --features video --target x86_64-pc-windows-msvc
-        env:
-          RUSTFLAGS: -L C:\PROGRA~1\ffmpeg\lib
-
-      - name: 📦 Package (With Video)
-        run: |
-          mkdir dist-video
-          mkdir dist-video\lib
-          copy target\x86_64-pc-windows-msvc\release\scout.exe dist-video\
-          copy "C:\Program Files\ffmpeg\bin\*.dll" dist-video\lib\
-          copy LICENSE dist-video\
-          copy README.md dist-video\
-          cd dist-video
-          7z a -mx=9 ..\scout-windows-x64-video.zip *
-
-      - name: 📤 Upload (With Video)
-        uses: actions/upload-artifact@v4
-        with:
-          name: scout-windows-x64-video.zip
-          path: scout-windows-x64-video.zip
           if-no-files-found: error
           retention-days: 7

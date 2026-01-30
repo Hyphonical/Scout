@@ -1,7 +1,7 @@
 //! Video frame extraction using FFmpeg via rsmpeg
 //!
 //! Extracts evenly-spaced frames from video files for embedding generation.
-//! Uses system-installed FFmpeg via rsmpeg bindings.
+//! **REQUIRES FFmpeg 6.x+ to be installed system-wide and in PATH.**
 //! Video support is optional at compile-time via the "video" feature flag.
 
 use anyhow::Result;
@@ -16,21 +16,9 @@ use anyhow::Context;
 use std::ffi::CString;
 
 #[cfg(feature = "video")]
-static FFMPEG_AVAILABLE: OnceLock<bool> = OnceLock::new();
-#[cfg(feature = "video")]
 static FFMPEG_WARNING_SHOWN: OnceLock<bool> = OnceLock::new();
 static VIDEO_FEATURE_WARNING_SHOWN: OnceLock<bool> = OnceLock::new();
-static VIDEO_DISABLED_BY_FLAG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
-/// Set whether video support is disabled by CLI flag
-pub fn set_video_disabled(disabled: bool) {
-	VIDEO_DISABLED_BY_FLAG.store(disabled, std::sync::atomic::Ordering::Relaxed);
-}
-
-/// Check if video support is disabled by CLI flag
-pub fn is_video_disabled() -> bool {
-	VIDEO_DISABLED_BY_FLAG.load(std::sync::atomic::Ordering::Relaxed)
-}
 /// Check if the video feature was compiled in
 pub fn is_video_feature_enabled() -> bool {
 	cfg!(feature = "video")
@@ -47,41 +35,13 @@ pub fn show_video_feature_warning_once() {
 	});
 }
 
-/// Checks if FFmpeg is available on the system at runtime
-#[cfg(feature = "video")]
-pub fn is_ffmpeg_available() -> bool {
-	*FFMPEG_AVAILABLE.get_or_init(|| {
-		// Try to initialize FFmpeg by checking if we can access the version
-		// This will fail if FFmpeg libraries are not installed
-		match std::panic::catch_unwind(|| {
-			use rsmpeg::ffi;
-			unsafe { 
-				let version = ffi::av_version_info();
-				!version.is_null()
-			}
-		}) {
-			Ok(result) => result,
-			Err(_) => {
-				eprintln!("Warning: FFmpeg libraries not found or failed to load");
-				false
-			}
-		}
-	})
-}
-
-/// Stub implementation when video feature is not enabled
-#[cfg(not(feature = "video"))]
-pub fn is_ffmpeg_available() -> bool {
-	false
-}
-
 /// Shows a one-time warning that FFmpeg is not installed
 #[cfg(feature = "video")]
 pub fn show_ffmpeg_warning_once() {
 	FFMPEG_WARNING_SHOWN.get_or_init(|| {
 		crate::logger::log(
 			crate::logger::Level::Warning,
-			"Video files found but FFmpeg not installed. Skipping videos. Install FFmpeg for video support.",
+			"FFmpeg not found. Install FFmpeg 6.x+ and ensure it's in your PATH. See docs/INSTALL_FFMPEG.md",
 		);
 		true
 	});
@@ -109,10 +69,7 @@ pub fn extract_frames(video_path: &Path, count: usize) -> Result<Vec<(f64, RgbIm
 		error::RsmpegError,
 		ffi,
 	};
-	
-	if !is_ffmpeg_available() {
-		anyhow::bail!("FFmpeg not found. Install FFmpeg to enable video support.");
-	}
+
 
 	if count == 0 {
 		anyhow::bail!("frame count must be at least 1");
