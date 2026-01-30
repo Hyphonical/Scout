@@ -36,9 +36,9 @@ jobs:
 
       - name: 🔧 Install FFmpeg 6 and Build Dependencies
         run: |
-          sudo add-apt-repository ppa:ubuntuhandbook1/ffmpeg6 -y
-          sudo apt update
-          sudo apt install -y \
+          sudo apt-get update
+          sudo apt-get install -y \
+            ffmpeg \
             pkg-config \
             libavcodec-dev \
             libavformat-dev \
