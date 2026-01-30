@@ -51,7 +51,8 @@ jobs:
             --disable-shared \
             --enable-static \
             --disable-doc \
-            --disable-debug
+            --disable-debug \
+            --disable-x86asm
           make -j$(nproc)
           make install
 
