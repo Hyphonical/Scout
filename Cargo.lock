@@ -2341,9 +2341,9 @@ dependencies = [
 
 [[package]]
 name = "rsmpeg"
-version = "0.17.0+ffmpeg.7.1"
+version = "0.18.0+ffmpeg.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db6a2ce4f192117d088f38ac5c03b9e144ce93c2c031a863b51449c1d838a09e"
+checksum = "523351495c9ff0bf4b99ed1f42f1415fc709526ddb63526cff85022b387c5811"
 dependencies = [
  "bon",
  "paste",
@@ -2456,7 +2456,6 @@ dependencies = [
  "serde",
  "tokenizers",
  "walkdir",
- "windows-sys",
 ]
 
 [[package]]
