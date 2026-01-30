@@ -1,4 +1,4 @@
-name: macOS Universal Build
+name: macOS Build
 
 on:
   push:
@@ -36,16 +36,14 @@ jobs:
 
       - name: 🔧 Install FFmpeg 6 and Build Dependencies
         run: |
-          # Install FFmpeg 6 from Homebrew
           brew install pkg-config ffmpeg@6
-          
-          # Link FFmpeg 6 (Homebrew doesn't link versioned formulas by default)
           brew link --overwrite ffmpeg@6
 
-      - name: 🚧 Build Release
-        run: cargo build --release --features video --target aarch64-apple-darwin
+      # Build WITHOUT video feature
+      - name: 🚧 Build Release (No Video)
+        run: cargo build --release --target aarch64-apple-darwin
 
-      - name: 📦 Package
+      - name: 📦 Package (No Video)
         run: |
           mkdir -p dist
           cp target/aarch64-apple-darwin/release/scout dist/
@@ -53,10 +51,30 @@ jobs:
           cd dist
           tar czf ../scout-macos-arm64.tar.gz *
 
-      - name: 📤 Upload
+      - name: 📤 Upload (No Video)
         uses: actions/upload-artifact@v4
         with:
           name: scout-macos-arm64.tar.gz
           path: scout-macos-arm64.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+      # Build WITH video feature
+      - name: 🚧 Build Release (With Video)
+        run: cargo build --release --features video --target aarch64-apple-darwin
+
+      - name: 📦 Package (With Video)
+        run: |
+          mkdir -p dist-video
+          cp target/aarch64-apple-darwin/release/scout dist-video/
+          cp LICENSE README.md dist-video/
+          cd dist-video
+          tar czf ../scout-macos-arm64-video.tar.gz *
+
+      - name: 📤 Upload (With Video)
+        uses: actions/upload-artifact@v4
+        with:
+          name: scout-macos-arm64-video.tar.gz
+          path: scout-macos-arm64-video.tar.gz
           if-no-files-found: error
           retention-days: 7

@@ -36,48 +36,58 @@ jobs:
 
       - name: 🔧 Install FFmpeg 6 and Build Dependencies
         run: |
-          # Install pkg-config and LLVM first (without version constraints)
           choco install pkgconfiglite llvm -y --force
+          choco install ffmpeg-shared --version 6.1.1 -y --install-arguments="'/D=C:\ffmpeg'"
           
-          # Install FFmpeg 6 shared libraries (with version pinning)
-          choco install ffmpeg-shared --version 6.1.1 -y
-          
-          # Set environment variables for FFmpeg
-          echo "FFMPEG_LIBS_DIR=C:\Program Files\ffmpeg\lib" | Out-File -FilePath $env:GITHUB_ENV -Append
-          echo "FFMPEG_INCLUDE_DIR=C:\Program Files\ffmpeg\include" | Out-File -FilePath $env:GITHUB_ENV -Append
-          echo "FFMPEG_DLL_PATH=C:\Program Files\ffmpeg\bin" | Out-File -FilePath $env:GITHUB_ENV -Append
-          
-          # Add FFmpeg lib dir to linker search path
-          echo "LIB=C:\Program Files\ffmpeg\lib;$env:LIB" | Out-File -FilePath $env:GITHUB_ENV -Append
-          
-          # Add FFmpeg bin to PATH for DLL discovery at runtime
-          echo "C:\Program Files\ffmpeg\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+          echo "FFMPEG_LIBS_DIR=C:\ffmpeg\lib" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "FFMPEG_INCLUDE_DIR=C:\ffmpeg\include" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "FFMPEG_DLL_PATH=C:\ffmpeg\bin" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "LIB=C:\ffmpeg\lib;$env:LIB" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "C:\ffmpeg\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
         shell: pwsh
 
-      - name: 🚧 Build Release
-        run: cargo build --release --features video --target x86_64-pc-windows-msvc
-        env:
-          # Explicitly tell linker where to find FFmpeg libs
-          RUSTFLAGS: -L C:\PROGRA~1\ffmpeg\lib
+      # Build WITHOUT video feature
+      - name: 🚧 Build Release (No Video)
+        run: cargo build --release --target x86_64-pc-windows-msvc
 
-      - name: 📦 Package
+      - name: 📦 Package (No Video)
         run: |
           mkdir dist
-          mkdir dist\lib
           copy target\x86_64-pc-windows-msvc\release\scout.exe dist\
-          
-          # Copy FFmpeg DLLs needed at runtime
-          copy "C:\Program Files\ffmpeg\bin\*.dll" dist\lib\
-          
           copy LICENSE dist\
           copy README.md dist\
           cd dist
           7z a -mx=9 ..\scout-windows-x64.zip *
 
-      - name: 📤 Upload
+      - name: 📤 Upload (No Video)
         uses: actions/upload-artifact@v4
         with:
           name: scout-windows-x64.zip
           path: scout-windows-x64.zip
+          if-no-files-found: error
+          retention-days: 7
+
+      # Build WITH video feature
+      - name: 🚧 Build Release (With Video)
+        run: cargo build --release --features video --target x86_64-pc-windows-msvc
+        env:
+          RUSTFLAGS: -L C:\ffmpeg\lib
+
+      - name: 📦 Package (With Video)
+        run: |
+          mkdir dist-video
+          mkdir dist-video\lib
+          copy target\x86_64-pc-windows-msvc\release\scout.exe dist-video\
+          copy "C:\ffmpeg\bin\*.dll" dist-video\lib\
+          copy LICENSE dist-video\
+          copy README.md dist-video\
+          cd dist-video
+          7z a -mx=9 ..\scout-windows-x64-video.zip *
+
+      - name: 📤 Upload (With Video)
+        uses: actions/upload-artifact@v4
+        with:
+          name: scout-windows-x64-video.zip
+          path: scout-windows-x64-video.zip
           if-no-files-found: error
           retention-days: 7

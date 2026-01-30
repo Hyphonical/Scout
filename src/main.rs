@@ -35,21 +35,15 @@ use types::{CombineWeight, MediaType};
 #[cfg(target_os = "windows")]
 fn setup_dll_directory() {
 	use std::env;
-	use std::path::PathBuf;
 	
 	if let Ok(exe_path) = env::current_exe() {
 		if let Some(exe_dir) = exe_path.parent() {
 			let lib_dir = exe_dir.join("lib");
 			if lib_dir.exists() {
-				unsafe {
-					use std::os::windows::ffi::OsStrExt;
-					let wide: Vec<u16> = lib_dir
-						.as_os_str()
-						.encode_wide()
-						.chain(std::iter::once(0))
-						.collect();
-
-					windows_sys::Win32::System::LibraryLoader::SetDllDirectoryW(wide.as_ptr());
+				// Add lib directory to PATH environment variable
+				if let Ok(current_path) = env::var("PATH") {
+					let new_path = format!("{};{}", lib_dir.display(), current_path);
+					env::set_var("PATH", new_path);
 				}
 			}
 		}
