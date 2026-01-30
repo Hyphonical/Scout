@@ -29,7 +29,7 @@ image = "0.25"
 ndarray = "0.17"
 
 # Video processing
-rsmpeg = { version = "0.17.0", default-features = false, features = ["link_system_ffmpeg"] }
+rsmpeg = { version = "0.18.0", default-features = false, features = ["link_system_ffmpeg"] }
 
 # ML/AI
 tokenizers = { version = "0.22.2", default-features = false, features = ["onig"] }
