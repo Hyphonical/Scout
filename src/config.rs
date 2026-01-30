@@ -31,6 +31,7 @@ pub const VIDEO_EXTENSIONS: &[&str] = &[
 	"mp4", "mkv", "avi", "mov", "wmv", "flv", "webm", "m4v", "mpg", "mpeg",
 ];
 
+#[cfg(feature = "video")]
 pub const VIDEO_FRAMES_TO_EXTRACT: usize = 10;
 
 /// Locates the models directory by searching up to 5 levels from executable,
