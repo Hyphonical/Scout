@@ -28,12 +28,14 @@ use std::{
 
 use crate::config::{CURSOR_BLINK_MS, DEBOUNCE_MS, LIVE_INDEX_PROGRESS, LIVE_RESULTS_LIMIT, SCORE_HIGH, SCORE_MED};
 use crate::models::ModelManager;
-use crate::sidecar::{iter_sidecars, ImageSidecar};
+use crate::sidecar::{iter_sidecars, Sidecar};
 use crate::types::Embedding;
 
-struct IndexedImage {
+struct IndexedMedia {
 	path: PathBuf,
-	embedding: Embedding,
+	/// For images: single (None, embedding)
+	/// For videos: Vec of (Some(timestamp), embedding) per frame
+	frames: Vec<(Option<f64>, Embedding)>,
 }
 
 struct FileInfo {
@@ -80,10 +82,10 @@ impl FileInfo {
 struct App {
 	query: String,
 	cursor_visible: bool,
-	results: Vec<(PathBuf, f32)>,
+	results: Vec<(PathBuf, f32, Option<f64>)>, // (path, score, timestamp)
 	selected: usize,
 	list_offset: usize,
-	index: Vec<IndexedImage>,
+	index: Vec<IndexedMedia>,
 	models: ModelManager,
 	status: String,
 	status_type: StatusType,
@@ -151,14 +153,14 @@ impl App {
 	}
 
 	fn mark_info_pending(&mut self) {
-		let current = self.results.get(self.selected).map(|(p, _)| p.clone());
+		let current = self.results.get(self.selected).map(|(p, _, _)| p.clone());
 		if current != self.last_info_path {
 			self.info_pending = true;
 		}
 	}
 
 	fn update_file_info(&mut self) {
-		let path = self.results.get(self.selected).map(|(p, _)| p.clone());
+		let path = self.results.get(self.selected).map(|(p, _, _)| p.clone());
 
 		if let Some(path) = path {
 			if Some(&path) != self.last_info_path.as_ref() {
@@ -173,7 +175,7 @@ impl App {
 	}
 
 	fn open_selected(&self) {
-		if let Some((path, _)) = self.results.get(self.selected) {
+		if let Some((path, _, _)) = self.results.get(self.selected) {
 			let _ = open::that(path);
 		}
 	}
@@ -186,7 +188,7 @@ impl App {
 			self.results.clear();
 			self.file_info = None;
 			self.last_info_path = None;
-			self.status = format!("{} images indexed", self.index.len());
+			self.status = format!("{} items indexed", self.index.len());
 			self.status_type = StatusType::Normal;
 			return;
 		}
@@ -202,12 +204,25 @@ impl App {
 			}
 		};
 
-		let mut scores: Vec<(PathBuf, f32)> = self
-			.index
-			.iter()
-			.map(|img| (img.path.clone(), query_emb.similarity(&img.embedding)))
-			.filter(|(_, s)| *s > 0.0)
-			.collect();
+		let mut scores: Vec<(PathBuf, f32, Option<f64>)> = Vec::new();
+
+		for media in &self.index {
+			// Find the best matching frame for this media item
+			let mut best_score = 0.0f32;
+			let mut best_timestamp = None;
+
+			for (timestamp, embedding) in &media.frames {
+				let score = query_emb.similarity(embedding);
+				if score > best_score {
+					best_score = score;
+					best_timestamp = *timestamp;
+				}
+			}
+
+			if best_score > 0.0 {
+				scores.push((media.path.clone(), best_score, best_timestamp));
+			}
+		}
 
 		scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
@@ -256,30 +271,56 @@ pub fn run(directory: &Path, recursive: bool) -> Result<()> {
 	let mut outdated = 0;
 
 	for (sidecar_path, base_dir) in iter_sidecars(&root, recursive) {
-		if let Ok(sidecar) = ImageSidecar::load(&sidecar_path) {
-			if !sidecar.is_current_version() {
-				outdated += 1;
-			}
-			let source_path = base_dir.join(&sidecar.filename);
-			if source_path.exists() {
-				app.index.push(IndexedImage {
-					path: source_path,
-					embedding: sidecar.embedding(),
-				});
-				loaded += 1;
+		match Sidecar::load_auto(&sidecar_path) {
+			Ok(Sidecar::Image(sidecar)) => {
+				if !sidecar.is_current_version() {
+					outdated += 1;
+				}
+				let source_path = base_dir.join(&sidecar.filename);
+				if source_path.exists() {
+					app.index.push(IndexedMedia {
+						path: source_path,
+						frames: vec![(None, sidecar.embedding())],
+					});
+					loaded += 1;
 
-				if loaded % LIVE_INDEX_PROGRESS == 0 {
-					app.status = format!("Loading... {} images", loaded);
-					terminal.draw(|f| draw(f, &mut app))?;
+					if loaded % LIVE_INDEX_PROGRESS == 0 {
+						app.status = format!("Loading... {} items", loaded);
+						terminal.draw(|f| draw(f, &mut app))?;
+					}
 				}
 			}
+			#[cfg(feature = "video")]
+			Ok(Sidecar::Video(sidecar)) => {
+				if !sidecar.is_current_version() {
+					outdated += 1;
+				}
+				let source_path = base_dir.join(&sidecar.filename);
+				if source_path.exists() {
+					app.index.push(IndexedMedia {
+						path: source_path,
+						frames: sidecar
+							.frames
+							.iter()
+							.map(|f| (Some(f.timestamp), f.embedding.clone()))
+							.collect(),
+					});
+					loaded += 1;
+
+					if loaded % LIVE_INDEX_PROGRESS == 0 {
+						app.status = format!("Loading... {} items", loaded);
+						terminal.draw(|f| draw(f, &mut app))?;
+					}
+				}
+			}
+			_ => {}
 		}
 	}
 
 	app.status = if outdated > 0 {
-		format!("{} images ({} outdated, run scan -f)", loaded, outdated)
+		format!("{} items ({} outdated, run scan -f)", loaded, outdated)
 	} else {
-		format!("{} images indexed", loaded)
+		format!("{} items indexed", loaded)
 	};
 	app.status_type = StatusType::Normal;
 
@@ -465,7 +506,7 @@ fn draw_results(f: &mut ratatui::Frame, app: &mut App, area: Rect) {
 		.enumerate()
 		.skip(app.list_offset)
 		.take(inner_height)
-		.map(|(i, (path, score))| {
+		.map(|(i, (path, score, timestamp))| {
 			let selected = i == app.selected;
 			let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("?");
 
@@ -490,13 +531,24 @@ fn draw_results(f: &mut ratatui::Frame, app: &mut App, area: Rect) {
 				Style::default().fg(Color::White)
 			};
 
-			let line = Line::from(vec![
+			let mut spans = vec![
 				Span::styled(pointer, pointer_style),
 				Span::styled(" ", Style::default()),
 				Span::styled(filename, name_style),
 				Span::styled("  ", Style::default()),
-				Span::styled(format!("{:.1}%", score * 100.0), Style::default().fg(score_color)),
-			]);
+			];
+
+			// Add timestamp for videos
+			if let Some(ts) = timestamp {
+				let minutes = (ts / 60.0) as u32;
+				let seconds = (ts % 60.0) as u32;
+				let time_str = format!("{}:{:02}  ", minutes, seconds);
+				spans.push(Span::styled(time_str, Style::default().fg(Color::Blue)));
+			}
+
+			spans.push(Span::styled(format!("{:.1}%", score * 100.0), Style::default().fg(score_color)));
+
+			let line = Line::from(spans);
 
 			let style = if selected {
 				Style::default().bg(Color::DarkGray)

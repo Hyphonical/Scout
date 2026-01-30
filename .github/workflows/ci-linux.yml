@@ -36,27 +36,10 @@ jobs:
       - name: 🔧 Install Build Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y yasm nasm build-essential pkg-config
-
-      - name: 🎬 Build FFmpeg v8 from Source
-        run: |
-          cd /tmp
-          wget https://ffmpeg.org/releases/ffmpeg-8.0.tar.xz
-          tar xf ffmpeg-8.0.tar.xz
-          cd ffmpeg-8.0
-          ./configure \
-            --prefix=$HOME/ffmpeg \
-            --enable-shared \
-            --disable-static \
-            --disable-doc \
-            --disable-programs
-          make -j$(nproc)
-          make install
-          echo "PKG_CONFIG_PATH=$HOME/ffmpeg/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
-          echo "LD_LIBRARY_PATH=$HOME/ffmpeg/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
+          sudo apt-get install -y pkg-config clang libavcodec-dev libavformat-dev libavutil-dev libswscale-dev
 
       - name: 🚧 Build Release
-        run: cargo build --release --target x86_64-unknown-linux-gnu
+        run: cargo build --release --features video --target x86_64-unknown-linux-gnu
 
       - name: 📦 Package
         run: |

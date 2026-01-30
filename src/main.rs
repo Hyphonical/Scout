@@ -37,6 +37,7 @@ fn main() -> Result<()> {
 
 	logger::set_verbose(cli.verbose);
 	set_provider(cli.provider);
+	video::set_video_disabled(cli.disable_video);
 
 	match cli.command {
 		Command::Scan {
@@ -109,6 +110,13 @@ fn run_scan(directory: &Path, recursive: bool, force: bool, filters: &ScanFilter
 		log(
 			Level::Info,
 			&format!("Filtered {} images (--verbose for details)", scan.filtered_count),
+		);
+	}
+
+	if scan.skipped_videos > 0 {
+		log(
+			Level::Info,
+			&format!("Skipped {} videos (--verbose for details)", scan.skipped_videos),
 		);
 	}
 

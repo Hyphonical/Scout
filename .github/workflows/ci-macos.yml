@@ -34,27 +34,10 @@ jobs:
           key: macos-aarch64-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: 🔧 Install Build Dependencies
-        run: brew install yasm nasm pkg-config
-
-      - name: 🎬 Build FFmpeg v8 from Source
-        run: |
-          cd /tmp
-          wget https://ffmpeg.org/releases/ffmpeg-8.0.tar.xz
-          tar xf ffmpeg-8.0.tar.xz
-          cd ffmpeg-8.0
-          ./configure \
-            --prefix=$HOME/ffmpeg \
-            --enable-shared \
-            --disable-static \
-            --disable-doc \
-            --disable-programs
-          make -j$(sysctl -n hw.ncpu)
-          make install
-          echo "PKG_CONFIG_PATH=$HOME/ffmpeg/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
-          echo "DYLD_LIBRARY_PATH=$HOME/ffmpeg/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
+        run: brew install pkg-config ffmpeg
 
       - name: 🚧 Build Release
-        run: cargo build --release --target aarch64-apple-darwin
+        run: cargo build --release --features video --target aarch64-apple-darwin
 
       - name: 📦 Package
         run: |
@@ -96,27 +79,10 @@ jobs:
           key: macos-x86_64-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: 🔧 Install Build Dependencies
-        run: brew install yasm nasm pkg-config
-
-      - name: 🎬 Build FFmpeg v8 from Source
-        run: |
-          cd /tmp
-          wget https://ffmpeg.org/releases/ffmpeg-8.0.tar.xz
-          tar xf ffmpeg-8.0.tar.xz
-          cd ffmpeg-8.0
-          ./configure \
-            --prefix=$HOME/ffmpeg \
-            --enable-shared \
-            --disable-static \
-            --disable-doc \
-            --disable-programs
-          make -j$(sysctl -n hw.ncpu)
-          make install
-          echo "PKG_CONFIG_PATH=$HOME/ffmpeg/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
-          echo "DYLD_LIBRARY_PATH=$HOME/ffmpeg/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
+        run: brew install pkg-config ffmpeg
 
       - name: 🚧 Build Release
-        run: cargo build --release --target x86_64-apple-darwin
+        run: cargo build --release --features video --target x86_64-apple-darwin
 
       - name: 📦 Package
         run: |

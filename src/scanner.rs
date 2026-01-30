@@ -91,6 +91,7 @@ pub struct ScanResult {
 	pub filtered_count: usize,
 	pub outdated_count: usize,
 	pub error_count: usize,
+	pub skipped_videos: usize,
 }
 
 impl ScanResult {
@@ -133,6 +134,7 @@ pub fn scan_directory(
 	let mut filtered = 0;
 	let mut outdated = 0;
 	let mut errors = 0;
+	let mut skipped_videos = 0;
 	let mut seen = HashSet::new();
 
 	let walker = if recursive {
@@ -151,8 +153,21 @@ pub fn scan_directory(
 		let media_type = if is_image(path) {
 			MediaType::Image
 		} else if is_video(path) {
+			// Check if video is disabled by CLI flag
+			if video::is_video_disabled() {
+				skipped_videos += 1;
+				continue;
+			}
+			// Check if video feature is compiled in
+			if !video::is_video_feature_enabled() {
+				video::show_video_feature_warning_once();
+				skipped_videos += 1;
+				continue;
+			}
+			// Check if FFmpeg is available at runtime
 			if !video::is_ffmpeg_available() {
 				video::show_ffmpeg_warning_once();
+				skipped_videos += 1;
 				continue;
 			}
 			MediaType::Video
@@ -219,6 +234,7 @@ pub fn scan_directory(
 		filtered_count: filtered,
 		outdated_count: outdated,
 		error_count: errors,
+		skipped_videos,
 	})
 }
 
