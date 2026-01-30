@@ -43,6 +43,10 @@ ratatui = "0.30.0"
 open = "5.3"
 walkdir = "2.5"
 
+# Platform-specific dependencies
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_System_LibraryLoader"] }
+
 # Platform-specific execution providers
 [target.'cfg(target_os = "macos")'.dependencies]
 ort = { version = "2.0.0-rc.11", features = ["std", "coreml", "xnnpack"] }

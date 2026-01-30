@@ -63,10 +63,11 @@ jobs:
       - name: 📦 Package
         run: |
           mkdir dist
+          mkdir dist\lib
           copy target\x86_64-pc-windows-msvc\release\scout.exe dist\
           
           # Copy FFmpeg DLLs needed at runtime
-          copy "C:\Program Files\ffmpeg\bin\*.dll" dist\
+          copy "C:\Program Files\ffmpeg\bin\*.dll" dist\lib\
           
           copy LICENSE dist\
           copy README.md dist\
