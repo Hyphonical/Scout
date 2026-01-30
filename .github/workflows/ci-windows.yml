@@ -58,7 +58,7 @@ jobs:
         run: cargo build --release --features video --target x86_64-pc-windows-msvc
         env:
           # Explicitly tell linker where to find FFmpeg libs
-          RUSTFLAGS: -L "C:\Program Files\ffmpeg\lib"
+          RUSTFLAGS: -L C:\PROGRA~1\ffmpeg\lib
 
       - name: 📦 Package
         run: |
