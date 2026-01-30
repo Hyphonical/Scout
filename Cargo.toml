@@ -45,7 +45,7 @@ walkdir = "2.5"
 
 # Platform-specific dependencies
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.59", features = ["Win32_System_LibraryLoader"] }
+windows-sys = { version = "0.61", features = ["Win32_System_LibraryLoader"] }
 
 # Platform-specific execution providers
 [target.'cfg(target_os = "macos")'.dependencies]
