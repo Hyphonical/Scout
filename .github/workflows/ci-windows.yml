@@ -34,16 +34,20 @@ jobs:
             target/
           key: windows-x86_64-cargo-${{ hashFiles('**/Cargo.lock') }}
 
+      # Install FFmpeg for video build
       - name: 🔧 Install FFmpeg 6 and Build Dependencies
         run: |
           choco install pkgconfiglite llvm -y --force
-          choco install ffmpeg-shared --version 6.1.1 -y --install-arguments="'/D=C:\ffmpeg'"
+          choco install ffmpeg-shared --version 6.1.1 -y
           
-          echo "FFMPEG_LIBS_DIR=C:\ffmpeg\lib" | Out-File -FilePath $env:GITHUB_ENV -Append
-          echo "FFMPEG_INCLUDE_DIR=C:\ffmpeg\include" | Out-File -FilePath $env:GITHUB_ENV -Append
-          echo "FFMPEG_DLL_PATH=C:\ffmpeg\bin" | Out-File -FilePath $env:GITHUB_ENV -Append
-          echo "LIB=C:\ffmpeg\lib;$env:LIB" | Out-File -FilePath $env:GITHUB_ENV -Append
-          echo "C:\ffmpeg\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+          # Use short path format to avoid space issues
+          echo "FFMPEG_LIBS_DIR=C:\PROGRA~1\ffmpeg\lib" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "FFMPEG_INCLUDE_DIR=C:\PROGRA~1\ffmpeg\include" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "FFMPEG_DLL_PATH=C:\PROGRA~1\ffmpeg\bin" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "LIB=C:\PROGRA~1\ffmpeg\lib;$env:LIB" | Out-File -FilePath $env:GITHUB_ENV -Append
+          
+          # Add to PATH
+          echo "C:\PROGRA~1\ffmpeg\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
         shell: pwsh
 
       # Build WITHOUT video feature
@@ -71,14 +75,14 @@ jobs:
       - name: 🚧 Build Release (With Video)
         run: cargo build --release --features video --target x86_64-pc-windows-msvc
         env:
-          RUSTFLAGS: -L C:\ffmpeg\lib
+          RUSTFLAGS: -L C:\PROGRA~1\ffmpeg\lib
 
       - name: 📦 Package (With Video)
         run: |
           mkdir dist-video
           mkdir dist-video\lib
           copy target\x86_64-pc-windows-msvc\release\scout.exe dist-video\
-          copy "C:\ffmpeg\bin\*.dll" dist-video\lib\
+          copy "C:\Program Files\ffmpeg\bin\*.dll" dist-video\lib\
           copy LICENSE dist-video\
           copy README.md dist-video\
           cd dist-video
