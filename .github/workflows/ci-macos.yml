@@ -13,6 +13,7 @@ jobs:
   build-arm64:
     name: 🚧 macOS ARM64 (Apple Silicon)
     runs-on: macos-latest
+
     steps:
       - name: 📥 Checkout
         uses: actions/checkout@v6
@@ -33,8 +34,13 @@ jobs:
             target/
           key: macos-aarch64-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: 🔧 Install Build Dependencies
-        run: brew install pkg-config ffmpeg
+      - name: 🔧 Install FFmpeg 6 and Build Dependencies
+        run: |
+          # Install FFmpeg 6 from Homebrew
+          brew install pkg-config ffmpeg@6
+          
+          # Link FFmpeg 6 (Homebrew doesn't link versioned formulas by default)
+          brew link --overwrite ffmpeg@6
 
       - name: 🚧 Build Release
         run: cargo build --release --features video --target aarch64-apple-darwin
@@ -58,6 +64,7 @@ jobs:
   build-x64:
     name: 🚧 macOS x86_64 (Intel)
     runs-on: macos-13
+
     steps:
       - name: 📥 Checkout
         uses: actions/checkout@v6
@@ -78,8 +85,13 @@ jobs:
             target/
           key: macos-x86_64-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: 🔧 Install Build Dependencies
-        run: brew install pkg-config ffmpeg
+      - name: 🔧 Install FFmpeg 6 and Build Dependencies
+        run: |
+          # Install FFmpeg 6 from Homebrew
+          brew install pkg-config ffmpeg@6
+          
+          # Link FFmpeg 6
+          brew link --overwrite ffmpeg@6
 
       - name: 🚧 Build Release
         run: cargo build --release --features video --target x86_64-apple-darwin
