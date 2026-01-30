@@ -302,7 +302,7 @@ pub fn run(directory: &Path, recursive: bool) -> Result<()> {
 						frames: sidecar
 							.frames
 							.iter()
-							.map(|f| (Some(f.timestamp_secs), f.embedding.clone()))
+							.map(|f| (Some(f.timestamp_secs), Embedding::raw(f.embedding.clone())))
 							.collect(),
 					});
 					loaded += 1;
