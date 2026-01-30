@@ -158,12 +158,6 @@ pub fn scan_directory(
 				skipped_videos += 1;
 				continue;
 			}
-			// Check if video feature is compiled in
-			if !video::is_video_feature_enabled() {
-				video::show_video_feature_warning_once();
-				skipped_videos += 1;
-				continue;
-			}
 			// Video processing will fail gracefully if FFmpeg is not installed
 			MediaType::Video
 		} else {

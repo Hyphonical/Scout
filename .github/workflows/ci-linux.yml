@@ -50,9 +50,8 @@ jobs:
             clang \
             llvm
 
-      # Build WITH video feature (only variant)
       - name: 🚧 Build Release
-        run: cargo build --release --features video --target x86_64-unknown-linux-gnu
+        run: cargo build --release --target x86_64-unknown-linux-gnu
 
       - name: 📦 Package
         run: |

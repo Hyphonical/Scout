@@ -39,9 +39,8 @@ jobs:
           brew install pkg-config ffmpeg@6
           brew link --overwrite ffmpeg@6
 
-      # Build WITH video feature (only variant)
       - name: 🚧 Build Release
-        run: cargo build --release --features video --target aarch64-apple-darwin
+        run: cargo build --release --target aarch64-apple-darwin
 
       - name: 📦 Package
         run: |

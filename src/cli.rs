@@ -82,6 +82,9 @@ pub struct Cli {
 	#[arg(short = 'p', long = "provider", global = true, default_value = "auto")]
 	pub provider: Provider,
 
+	#[arg(long = "disable-video", global = true, help = "Skip video files during scanning")]
+	pub disable_video: bool,
+
 	#[command(subcommand)]
 	pub command: Command,
 }

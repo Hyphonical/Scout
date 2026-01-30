@@ -2,41 +2,27 @@
 //!
 //! Extracts evenly-spaced frames from video files for embedding generation.
 //! **REQUIRES FFmpeg 6.x+ to be installed system-wide and in PATH.**
-//! Video support is optional at compile-time via the "video" feature flag.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use image::RgbImage;
+use std::ffi::CString;
 use std::path::Path;
 use std::sync::OnceLock;
 
-#[cfg(feature = "video")]
-use anyhow::Context;
-
-#[cfg(feature = "video")]
-use std::ffi::CString;
-
-#[cfg(feature = "video")]
 static FFMPEG_WARNING_SHOWN: OnceLock<bool> = OnceLock::new();
-static VIDEO_FEATURE_WARNING_SHOWN: OnceLock<bool> = OnceLock::new();
+static VIDEO_DISABLED_BY_FLAG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
-/// Check if the video feature was compiled in
-pub fn is_video_feature_enabled() -> bool {
-	cfg!(feature = "video")
+/// Set whether video support is disabled by CLI flag
+pub fn set_video_disabled(disabled: bool) {
+	VIDEO_DISABLED_BY_FLAG.store(disabled, std::sync::atomic::Ordering::Relaxed);
 }
 
-/// Shows a one-time warning that video feature was not compiled in
-pub fn show_video_feature_warning_once() {
-	VIDEO_FEATURE_WARNING_SHOWN.get_or_init(|| {
-		crate::logger::log(
-			crate::logger::Level::Warning,
-			"Video files found but video support not compiled. Rebuild with: cargo build --features video",
-		);
-		true
-	});
+/// Check if video support is disabled by CLI flag
+pub fn is_video_disabled() -> bool {
+	VIDEO_DISABLED_BY_FLAG.load(std::sync::atomic::Ordering::Relaxed)
 }
 
 /// Shows a one-time warning that FFmpeg is not installed
-#[cfg(feature = "video")]
 pub fn show_ffmpeg_warning_once() {
 	FFMPEG_WARNING_SHOWN.get_or_init(|| {
 		crate::logger::log(
@@ -47,14 +33,7 @@ pub fn show_ffmpeg_warning_once() {
 	});
 }
 
-/// Stub implementation when video feature is not enabled
-#[cfg(not(feature = "video"))]
-pub fn show_ffmpeg_warning_once() {
-	// No-op when video feature is disabled
-}
-
 /// Extracts N evenly-spaced frames from a video file
-#[cfg(feature = "video")]
 ///
 /// # Arguments
 /// * `video_path` - Path to the video file
@@ -178,14 +157,7 @@ pub fn extract_frames(video_path: &Path, count: usize) -> Result<Vec<(f64, RgbIm
 	Ok(frames)
 }
 
-/// Stub implementation when video feature is not enabled
-#[cfg(not(feature = "video"))]
-pub fn extract_frames(_video_path: &Path, _count: usize) -> Result<Vec<(f64, RgbImage)>> {
-	anyhow::bail!("Video support not compiled. Rebuild with: cargo build --features video")
-}
-
 /// Converts an AVFrame to RgbImage using swscale
-#[cfg(feature = "video")]
 fn frame_to_rgb(frame: &rsmpeg::avutil::AVFrame, decode_ctx: &rsmpeg::avcodec::AVCodecContext) -> Result<RgbImage> {
 	use rsmpeg::{avutil::AVFrame, swscale::SwsContext, ffi};
 	

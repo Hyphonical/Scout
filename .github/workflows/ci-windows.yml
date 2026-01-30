@@ -34,7 +34,6 @@ jobs:
             target/
           key: windows-x86_64-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      # Install FFmpeg for video build
       - name: 🔧 Install FFmpeg 6 and Build Dependencies
         run: |
           choco install pkgconfiglite llvm -y --force
@@ -50,9 +49,8 @@ jobs:
           echo "C:\PROGRA~1\ffmpeg\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
         shell: pwsh
 
-      # Build WITH video feature (only variant)
       - name: 🚧 Build Release
-        run: cargo build --release --features video --target x86_64-pc-windows-msvc
+        run: cargo build --release --target x86_64-pc-windows-msvc
         env:
           RUSTFLAGS: -L C:\PROGRA~1\ffmpeg\lib
 

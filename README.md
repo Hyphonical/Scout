@@ -53,10 +53,10 @@ So if you're the kind of person who has 10,000+ photos scattered across folders 
 ```bash
 git clone https://github.com/Hyphonical/Scout.git
 cd scout
-cargo build --release --features video
+cargo build --release
 ```
 
-> **Note:** Building with video support requires FFmpeg development libraries. See [BUILD.md](docs/BUILD.md) for platform-specific instructions.
+> **Note:** Building requires FFmpeg development libraries. See [BUILD.md](docs/BUILD.md) for platform-specific instructions.
 
 Binary will be at `target/release/scout` (or `scout.exe` on Windows).
 

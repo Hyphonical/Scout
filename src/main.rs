@@ -38,6 +38,7 @@ fn main() -> Result<()> {
 
 	logger::set_verbose(cli.verbose);
 	set_provider(cli.provider);
+	video::set_video_disabled(cli.disable_video);
 
 	match cli.command {
 		Command::Scan {

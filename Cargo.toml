@@ -28,8 +28,8 @@ chrono = { version = "0.4", features = ["serde"] }
 image = "0.25"
 ndarray = "0.17"
 
-# Video processing (optional)
-rsmpeg = { version = "0.17.0", optional = true, default-features = false, features = ["link_system_ffmpeg"] }
+# Video processing
+rsmpeg = { version = "0.17.0", default-features = false, features = ["link_system_ffmpeg"] }
 
 # ML/AI
 tokenizers = { version = "0.22.2", default-features = false, features = ["onig"] }
@@ -43,10 +43,6 @@ ratatui = "0.30.0"
 open = "5.3"
 walkdir = "2.5"
 
-# Platform-specific dependencies
-[target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_System_LibraryLoader"] }
-
 # Platform-specific execution providers
 [target.'cfg(target_os = "macos")'.dependencies]
 ort = { version = "2.0.0-rc.11", features = ["std", "coreml", "xnnpack"] }
@@ -59,7 +55,6 @@ ort = { version = "2.0.0-rc.11", features = ["std", "cuda", "tensorrt", "xnnpack
 
 [features]
 default = []
-video = ["rsmpeg"]
 
 [profile.release]
 opt-level = 3
