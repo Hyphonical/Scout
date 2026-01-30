@@ -33,18 +33,16 @@ jobs:
             target/
           key: linux-x86_64-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: 🔧 Build FFmpeg 7 from source
+      - name: 🔧 Install FFmpeg 6
         run: |
           sudo apt-get update
-          sudo apt-get install -y yasm nasm pkg-config build-essential
-          wget https://ffmpeg.org/releases/ffmpeg-7.0.tar.bz2
-          tar xf ffmpeg-7.0.tar.bz2
-          cd ffmpeg-7.0
-          ./configure --prefix=$HOME/ffmpeg --disable-shared --enable-static --disable-doc --disable-debug
-          make -j$(nproc)
-          make install
-          export FFMPEG_LIBS_DIR=$HOME/ffmpeg/lib
-          export FFMPEG_INCLUDE_DIR=$HOME/ffmpeg/include
+          sudo apt-get install -y \
+            ffmpeg=6:* \
+            libavcodec-dev=6:* \
+            libavformat-dev=6:* \
+            libavutil-dev=6:* \
+            libswscale-dev=6:* \
+            libavdevice-dev=6:*
 
       - name: 🚧 Build Release
         run: cargo build --release --features video --target x86_64-unknown-linux-gnu
