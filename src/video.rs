@@ -25,7 +25,9 @@ use rsmpeg::{
 #[cfg(feature = "video")]
 use std::ffi::CString;
 
+#[cfg(feature = "video")]
 static FFMPEG_AVAILABLE: OnceLock<bool> = OnceLock::new();
+#[cfg(feature = "video")]
 static FFMPEG_WARNING_SHOWN: OnceLock<bool> = OnceLock::new();
 static VIDEO_FEATURE_WARNING_SHOWN: OnceLock<bool> = OnceLock::new();
 static VIDEO_DISABLED_BY_FLAG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
@@ -221,7 +223,6 @@ pub fn extract_frames(_video_path: &Path, _count: usize) -> Result<Vec<(f64, Rgb
 
 /// Converts an AVFrame to RgbImage using swscale
 #[cfg(feature = "video")]
-/// Converts an AVFrame to RgbImage using swscale
 fn frame_to_rgb(frame: &AVFrame, decode_ctx: &AVCodecContext) -> Result<RgbImage> {
 	let width = decode_ctx.width as u32;
 	let height = decode_ctx.height as u32;

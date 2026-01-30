@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use crate::logger::{log, Level};
 use crate::models::ModelManager;
 use crate::sidecar::{current_version, iter_sidecars, Sidecar};
-use crate::types::{CombineWeight, Embedding, SearchMatch, MediaType};
+use crate::types::{CombineWeight, Embedding, SearchMatch};
 
 /// Search query variants supporting different search modes
 pub enum SearchQuery<'a> {
