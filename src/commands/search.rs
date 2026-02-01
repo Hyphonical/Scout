@@ -13,6 +13,7 @@ use crate::ui;
 pub struct Match {
 	pub path: String,
 	pub score: f32,
+	pub timestamp: Option<f64>,
 }
 
 pub fn run(
@@ -76,25 +77,57 @@ pub fn run(
 
 	for (sidecar_path, media_dir) in sidecars {
 		let Ok(sidecar) = storage::load(&sidecar_path) else { continue };
-
+		
 		if !sidecar.is_current_version() {
 			outdated += 1;
 		}
-
-		let mut score = query_emb.similarity(&sidecar.embedding());
-
-		// Apply negative penalty
-		if let Some(ref neg_emb) = negative_emb {
-			let neg_score = neg_emb.similarity(&sidecar.embedding());
-			score = score - (neg_score * NEGATIVE_WEIGHT);
-		}
-
-		if score >= min_score {
-			let image_path = media_dir.join(sidecar.filename());
-			matches.push(Match {
-				path: image_path.to_string_lossy().to_string(),
-				score,
-			});
+		
+		match sidecar {
+			storage::Sidecar::Image(img) => {
+				let mut score = query_emb.similarity(&img.embedding());
+				
+				if let Some(ref neg_emb) = negative_emb {
+					let neg_score = neg_emb.similarity(&img.embedding());
+					score = score - (neg_score * NEGATIVE_WEIGHT);
+				}
+				
+				if score >= min_score {
+					let image_path = media_dir.join(img.filename());
+					matches.push(Match {
+						path: image_path.to_string_lossy().to_string(),
+						score,
+						timestamp: None,
+					});
+				}
+			}
+			storage::Sidecar::Video(vid) => {
+				// Find best frame
+				let mut best_score = 0.0;
+				let mut best_timestamp = 0.0;
+				
+				for (timestamp, frame_emb) in vid.frames() {
+					let mut score = query_emb.similarity(&frame_emb);
+					
+					if let Some(ref neg_emb) = negative_emb {
+						let neg_score = neg_emb.similarity(&frame_emb);
+						score = score - (neg_score * NEGATIVE_WEIGHT);
+					}
+					
+					if score > best_score {
+						best_score = score;
+						best_timestamp = timestamp;
+					}
+				}
+				
+				if best_score >= min_score {
+					let video_path = media_dir.join(vid.filename());
+					matches.push(Match {
+						path: video_path.to_string_lossy().to_string(),
+						score: best_score,
+						timestamp: Some(best_timestamp),
+					});
+				}
+			}
 		}
 	}
 
@@ -120,11 +153,18 @@ pub fn run(
 
 		let link = ui::log::path_link(path);
 		let percentage = (m.score * 100.0).round() as u32;
+		
+		let timestamp_str = if let Some(ts) = m.timestamp {
+			format!(" @ {}", crate::processing::video::format_timestamp(ts).bright_yellow())
+		} else {
+			String::new()
+		};
 
 		println!(
-			"{}. {} {} {}",
+			"{}. {}{} {} {}",
 			format!("{:2}", i + 1).bright_blue().bold(),
 			link.bright_white(),
+			timestamp_str.dimmed(),
 			format!("{}%", percentage).dimmed(),
 			if m.score > 0.8 { "🔥" } else { "" }
 		);

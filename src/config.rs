@@ -25,6 +25,13 @@ pub const IMAGE_EXTENSIONS: &[&str] = &[
 	"jpg", "jpeg", "png", "gif", "bmp", "webp", "tiff", "tif", "ico", "avif",
 ];
 
+pub const VIDEO_EXTENSIONS: &[&str] = &[
+	"mp4", "mkv", "avi", "mov", "wmv", "flv", "webm", "m4v", "mpg", "mpeg",
+];
+
+/// Number of frames to extract from videos
+pub const VIDEO_FRAME_COUNT: usize = 10;
+
 // === Search Defaults ===
 pub const DEFAULT_LIMIT: usize = 10;
 pub const DEFAULT_MIN_SCORE: f32 = 0.0;

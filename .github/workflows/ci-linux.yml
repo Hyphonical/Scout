@@ -42,7 +42,6 @@ jobs:
           mkdir -p dist
           cp target/x86_64-unknown-linux-gnu/release/scout dist/
           cp LICENSE README.md dist/
-          cp docs/INSTALL_FFMPEG.md dist/
           cd dist
           tar czf ../scout-linux-x64.tar.gz *
 

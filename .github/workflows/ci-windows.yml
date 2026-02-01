@@ -43,7 +43,6 @@ jobs:
           copy target\x86_64-pc-windows-msvc\release\scout.exe dist\
           copy LICENSE dist\
           copy README.md dist\
-          copy docs\INSTALL_FFMPEG.md dist\
           cd dist
           7z a -mx=9 ..\scout-windows-x64.zip *
 

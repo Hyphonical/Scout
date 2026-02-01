@@ -42,7 +42,6 @@ jobs:
           mkdir -p dist
           cp target/aarch64-apple-darwin/release/scout dist/
           cp LICENSE README.md dist/
-          cp docs/INSTALL_FFMPEG.md dist/
           cd dist
           tar czf ../scout-macos-arm64.tar.gz *
 
