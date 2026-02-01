@@ -34,25 +34,8 @@ jobs:
             target/
           key: windows-x86_64-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: 🔧 Install FFmpeg 6 and Build Dependencies
-        run: |
-          choco install pkgconfiglite llvm -y --force
-          choco install ffmpeg-shared --version 6.1.1 -y
-          
-          # Use short path format to avoid space issues
-          echo "FFMPEG_LIBS_DIR=C:\PROGRA~1\ffmpeg\lib" | Out-File -FilePath $env:GITHUB_ENV -Append
-          echo "FFMPEG_INCLUDE_DIR=C:\PROGRA~1\ffmpeg\include" | Out-File -FilePath $env:GITHUB_ENV -Append
-          echo "FFMPEG_DLL_PATH=C:\PROGRA~1\ffmpeg\bin" | Out-File -FilePath $env:GITHUB_ENV -Append
-          echo "LIB=C:\PROGRA~1\ffmpeg\lib;$env:LIB" | Out-File -FilePath $env:GITHUB_ENV -Append
-          
-          # Add to PATH
-          echo "C:\PROGRA~1\ffmpeg\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
-        shell: pwsh
-
       - name: 🚧 Build Release
         run: cargo build --release --target x86_64-pc-windows-msvc
-        env:
-          RUSTFLAGS: -L C:\PROGRA~1\ffmpeg\lib
 
       - name: 📦 Package
         run: |

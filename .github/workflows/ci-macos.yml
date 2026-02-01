@@ -34,11 +34,6 @@ jobs:
             target/
           key: macos-aarch64-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: 🔧 Install FFmpeg 6 and Build Dependencies
-        run: |
-          brew install pkg-config ffmpeg@6
-          brew link --overwrite ffmpeg@6
-
       - name: 🚧 Build Release
         run: cargo build --release --target aarch64-apple-darwin
 

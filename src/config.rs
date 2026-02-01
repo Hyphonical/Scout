@@ -1,78 +1,100 @@
-//! Application configuration constants
-//!
-//! Centralized configuration for model files, paths, and runtime parameters.
+//! Application configuration and constants
 
 use std::path::PathBuf;
+use std::sync::OnceLock;
 
+static CUSTOM_MODEL_DIR: OnceLock<PathBuf> = OnceLock::new();
+static CUSTOM_VISION: OnceLock<PathBuf> = OnceLock::new();
+static CUSTOM_TEXT: OnceLock<PathBuf> = OnceLock::new();
+static CUSTOM_TOKENIZER: OnceLock<PathBuf> = OnceLock::new();
+
+// === Model Files ===
 pub const VISION_MODEL: &str = "vision_model_q4f16.onnx";
 pub const TEXT_MODEL: &str = "text_model_q4f16.onnx";
 pub const TOKENIZER: &str = "tokenizer.json";
 
+// === Model Parameters ===
 pub const INPUT_SIZE: u32 = 512;
 pub const EMBEDDING_DIM: usize = 1024;
 
+// === Storage ===
 pub const SIDECAR_DIR: &str = ".scout";
 pub const SIDECAR_EXT: &str = "msgpack";
 
-pub const DEBOUNCE_MS: u64 = 400;
-pub const CURSOR_BLINK_MS: u64 = 530;
-
-pub const LIVE_RESULTS_LIMIT: usize = 50;
-pub const LIVE_INDEX_PROGRESS: usize = 100;
-
-pub const SCORE_HIGH: f32 = 0.15;
-pub const SCORE_MED: f32 = 0.08;
-
+// === File Extensions ===
 pub const IMAGE_EXTENSIONS: &[&str] = &[
-	"jpg", "jpeg", "png", "gif", "bmp", "webp", "tiff", "tif", "ico", "avif",
+    "jpg", "jpeg", "png", "gif", "bmp", "webp", "tiff", "tif", "ico", "avif",
 ];
 
-pub const VIDEO_EXTENSIONS: &[&str] = &[
-	"mp4", "mkv", "avi", "mov", "wmv", "flv", "webm", "m4v", "mpg", "mpeg",
-];
+// === Search Defaults ===
+pub const DEFAULT_LIMIT: usize = 10;
+pub const DEFAULT_MIN_SCORE: f32 = 0.0;
+pub const NEGATIVE_WEIGHT: f32 = 0.7;
 
-#[cfg(feature = "video")]
-pub const VIDEO_FRAMES_TO_EXTRACT: usize = 10;
-
-/// Locates the models directory by searching up to 5 levels from executable,
-/// then falling back to current working directory
-pub fn find_models_dir() -> Option<PathBuf> {
-	if let Ok(exe) = std::env::current_exe() {
-		let mut dir = exe.parent();
-		for _ in 0..5 {
-			if let Some(d) = dir {
-				let models = d.join("models");
-				if models.is_dir() {
-					return Some(models);
-				}
-				dir = d.parent();
-			} else {
-				break;
-			}
-		}
-	}
-
-	let cwd = std::env::current_dir().ok()?.join("models");
-	cwd.is_dir().then_some(cwd)
+pub fn set_model_dir(path: PathBuf) {
+    let _ = CUSTOM_MODEL_DIR.set(path);
 }
 
-/// Returns the absolute path to the vision model file if it exists
+pub fn set_vision_model(path: PathBuf) {
+    let _ = CUSTOM_VISION.set(path);
+}
+
+pub fn set_text_model(path: PathBuf) {
+    let _ = CUSTOM_TEXT.set(path);
+}
+
+pub fn set_tokenizer(path: PathBuf) {
+    let _ = CUSTOM_TOKENIZER.set(path);
+}
+
+/// Get models directory (same dir as executable, or SCOUT_MODELS_DIR env var)
+pub fn models_dir() -> Option<PathBuf> {
+    // Check custom model dir first
+    if let Some(custom) = CUSTOM_MODEL_DIR.get() {
+        crate::ui::debug(&format!("Using custom model dir: {}", custom.display()));
+        return Some(custom.clone());
+    }
+    
+    // Check environment variable first
+    if let Ok(env_path) = std::env::var("SCOUT_MODELS_DIR") {
+        let path = PathBuf::from(&env_path);
+        if path.is_dir() {
+            crate::ui::debug(&format!("Using SCOUT_MODELS_DIR: {}", env_path));
+            return Some(path);
+        }
+    }
+    
+    // Check next to executable
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            let models = dir.join("models");
+            if models.is_dir() {
+                crate::ui::debug(&format!("Found models at: {}", models.display()));
+                return Some(models);
+            }
+        }
+    }
+    
+    None
+}
+
 pub fn get_vision_model_path() -> Option<PathBuf> {
-	let models = find_models_dir()?;
-	let path = models.join(VISION_MODEL);
-	path.exists().then_some(path)
+    if let Some(custom) = CUSTOM_VISION.get() {
+        return Some(custom.clone());
+    }
+    models_dir().map(|d| d.join(VISION_MODEL))
 }
 
-/// Returns the absolute path to the text model file if it exists
 pub fn get_text_model_path() -> Option<PathBuf> {
-	let models = find_models_dir()?;
-	let path = models.join(TEXT_MODEL);
-	path.exists().then_some(path)
+    if let Some(custom) = CUSTOM_TEXT.get() {
+        return Some(custom.clone());
+    }
+    models_dir().map(|d| d.join(TEXT_MODEL))
 }
 
-/// Returns the absolute path to the tokenizer file if it exists
 pub fn get_tokenizer_path() -> Option<PathBuf> {
-	let models = find_models_dir()?;
-	let path = models.join(TOKENIZER);
-	path.exists().then_some(path)
+    if let Some(custom) = CUSTOM_TOKENIZER.get() {
+        return Some(custom.clone());
+    }
+    models_dir().map(|d| d.join(TOKENIZER))
 }
