@@ -1,7 +1,7 @@
 //! Execution provider selection
 
 use anyhow::{Context, Result};
-use ort::session::{Session, builder::GraphOptimizationLevel};
+use ort::session::{builder::GraphOptimizationLevel, Session};
 use std::path::Path;
 use std::sync::Mutex;
 
@@ -13,7 +13,9 @@ static mut SELECTED_PROVIDER: Provider = Provider::Auto;
 static PROVIDER_LOGGED: Mutex<bool> = Mutex::new(false);
 
 pub fn set_provider(p: Provider) {
-	unsafe { SELECTED_PROVIDER = p; }
+	unsafe {
+		SELECTED_PROVIDER = p;
+	}
 }
 
 fn get_provider() -> Provider {
@@ -21,8 +23,7 @@ fn get_provider() -> Provider {
 }
 
 pub fn create_session(model_path: &Path) -> Result<Session> {
-	let mut builder = Session::builder()
-		.context("Failed to create session builder")?;
+	let mut builder = Session::builder().context("Failed to create session builder")?;
 
 	match get_provider() {
 		Provider::Auto => register_best(&mut builder),
@@ -66,13 +67,21 @@ pub fn create_session(model_path: &Path) -> Result<Session> {
 }
 
 fn register_best(builder: &mut ort::session::builder::SessionBuilder) {
-	if try_tensorrt(builder) { return; }
-	if try_cuda(builder) { return; }
+	if try_tensorrt(builder) {
+		return;
+	}
+	if try_cuda(builder) {
+		return;
+	}
 
 	#[cfg(target_os = "macos")]
-	if try_coreml(builder) { return; }
+	if try_coreml(builder) {
+		return;
+	}
 
-	if try_xnnpack(builder) { return; }
+	if try_xnnpack(builder) {
+		return;
+	}
 
 	let mut logged = PROVIDER_LOGGED.lock().unwrap();
 	if !*logged {

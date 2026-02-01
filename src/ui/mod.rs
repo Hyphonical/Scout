@@ -2,4 +2,4 @@
 
 pub mod log;
 
-pub use log::{Log, info, success, warn, error, debug, header};
+pub use log::{debug, error, header, info, success, warn, Log};

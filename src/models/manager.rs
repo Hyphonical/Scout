@@ -16,12 +16,9 @@ pub struct Models {
 
 impl Models {
 	pub fn new() -> Result<Self> {
-		let vision_path = config::get_vision_model_path()
-			.context("Vision model not found")?;
-		let text_path = config::get_text_model_path()
-			.context("Text model not found")?;
-		let tokenizer_path = config::get_tokenizer_path()
-			.context("Tokenizer not found")?;
+		let vision_path = config::get_vision_model_path().context("Vision model not found")?;
+		let text_path = config::get_text_model_path().context("Text model not found")?;
+		let tokenizer_path = config::get_tokenizer_path().context("Tokenizer not found")?;
 
 		Ok(Self {
 			vision: None,
@@ -34,7 +31,10 @@ impl Models {
 
 	pub fn encode_image(&mut self, image: &image::DynamicImage) -> Result<Embedding> {
 		if self.vision.is_none() {
-			crate::ui::debug(&format!("Loading vision model: {}", self.vision_path.display()));
+			crate::ui::debug(&format!(
+				"Loading vision model: {}",
+				self.vision_path.display()
+			));
 			self.vision = Some(super::vision::VisionModel::load(&self.vision_path)?);
 			crate::ui::success("Vision model loaded");
 		}
@@ -45,7 +45,10 @@ impl Models {
 	pub fn encode_text(&mut self, text: &str) -> Result<Embedding> {
 		if self.text.is_none() {
 			crate::ui::debug(&format!("Loading text model: {}", self.text_path.display()));
-			self.text = Some(super::text::TextModel::load(&self.text_path, &self.tokenizer_path)?);
+			self.text = Some(super::text::TextModel::load(
+				&self.text_path,
+				&self.tokenizer_path,
+			)?);
 			crate::ui::success("Text model loaded");
 		}
 

@@ -19,7 +19,7 @@ const SLOGANS: &[&str] = &[
 	"This folder better contain cats! =^..^=",
 	"That's not SFW...",
 	"\"Trust me bro, it's in here\"",
-	"Ahw a Chihuahua!... Oh no wait, it's a muffin"
+	"Ahw a Chihuahua!... Oh no wait, it's a muffin",
 ];
 
 pub fn random_slogan() -> &'static str {
@@ -66,7 +66,7 @@ pub fn header(text: &str) {
 }
 
 /// Clickable file path (OSC 8 terminal hyperlink)
-pub fn path_link(path: &std::path::Path) -> String {
+pub fn path_link(path: &std::path::Path, max_len: usize) -> String {
 	let absolute = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 
 	let uri = if cfg!(windows) {
@@ -77,9 +77,20 @@ pub fn path_link(path: &std::path::Path) -> String {
 		format!("file://{}", absolute.display())
 	};
 
-	let filename = path.file_name()
+	let filename = path
+		.file_name()
 		.and_then(|n| n.to_str())
 		.unwrap_or("unknown");
 
-	format!("\x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\", uri, filename)
+	let display_name = if filename.len() > max_len {
+		format!(
+			"{}...{}",
+			&filename[..max_len / 2],
+			&filename[filename.len() - (max_len / 2 - 3)..]
+		)
+	} else {
+		filename.to_string()
+	};
+
+	format!("\x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\", uri, display_name)
 }

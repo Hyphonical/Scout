@@ -13,8 +13,8 @@ pub struct VisionModel {
 
 impl VisionModel {
 	pub fn load(model_path: &Path) -> Result<Self> {
-		let session = crate::runtime::create_session(model_path)
-			.context("Failed to load vision model")?;
+		let session =
+			crate::runtime::create_session(model_path).context("Failed to load vision model")?;
 		Ok(Self { session })
 	}
 
@@ -43,9 +43,9 @@ fn preprocess(img: &image::DynamicImage) -> Result<(Vec<usize>, Vec<f32>)> {
 		for x in 0..size {
 			let px = rgb.get_pixel(x as u32, y as u32);
 			let idx = y * size + x;
-			data[idx] = px[0] as f32 / 255.0;                    // R
-			data[size * size + idx] = px[1] as f32 / 255.0;      // G
-			data[2 * size * size + idx] = px[2] as f32 / 255.0;  // B
+			data[idx] = px[0] as f32 / 255.0; // R
+			data[size * size + idx] = px[1] as f32 / 255.0; // G
+			data[2 * size * size + idx] = px[2] as f32 / 255.0; // B
 		}
 	}
 
@@ -53,7 +53,8 @@ fn preprocess(img: &image::DynamicImage) -> Result<(Vec<usize>, Vec<f32>)> {
 }
 
 fn extract_embedding(outputs: &ort::session::SessionOutputs) -> Result<Vec<f32>> {
-	let pooler = outputs.get("pooler_output")
+	let pooler = outputs
+		.get("pooler_output")
 		.context("No pooler output found")?;
 
 	let (shape, data) = pooler.try_extract_tensor::<f32>()?;

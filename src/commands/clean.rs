@@ -13,7 +13,9 @@ pub fn run(dir: &Path, recursive: bool) -> anyhow::Result<()> {
 	let mut orphaned = Vec::new();
 
 	for (sidecar_path, media_dir) in sidecars {
-		let Ok(sidecar) = storage::load(&sidecar_path) else { continue };
+		let Ok(sidecar) = storage::load(&sidecar_path) else {
+			continue;
+		};
 		let image_path = media_dir.join(sidecar.filename());
 
 		if !image_path.exists() {

@@ -25,21 +25,65 @@ fn main() {
 		config::set_model_dir(dir);
 	}
 
+	// Set FFmpeg path if provided
+	if let Some(path) = cli.ffmpeg_path {
+		processing::video::set_ffmpeg_path(path);
+	}
+
 	// Set provider
 	if let Some(provider) = cli.provider {
 		runtime::set_provider(provider);
 	}
 
 	let result = match cli.command {
-		cli::Command::Scan { dir, recursive, force, min_resolution, max_size } => {
-			commands::scan::run(&dir, recursive, force, min_resolution, max_size)
-		}
-		cli::Command::Search { query, image, weight, not, dir, recursive, limit, score, open } => {
-			commands::search::run(query.as_deref(), image.as_deref(), weight, not.as_deref(), &dir, recursive, limit, score, open)
-		}
-		cli::Command::Clean { dir, recursive } => {
-			commands::clean::run(&dir, recursive)
-		}
+		cli::Command::Scan {
+			dir,
+			recursive,
+			force,
+			min_resolution,
+			max_size,
+			exclude_videos,
+		} => commands::scan::run(
+			&dir,
+			recursive,
+			force,
+			min_resolution,
+			max_size,
+			exclude_videos,
+		),
+		cli::Command::Search {
+			query,
+			image,
+			weight,
+			not,
+			dir,
+			recursive,
+			limit,
+			score,
+			open,
+			include_ref,
+			exclude_videos,
+		} => commands::search::run(
+			query.as_deref(),
+			image.as_deref(),
+			weight,
+			not.as_deref(),
+			&dir,
+			recursive,
+			limit,
+			score,
+			open,
+			include_ref,
+			exclude_videos,
+		),
+		cli::Command::Clean { dir, recursive } => commands::clean::run(&dir, recursive),
+		cli::Command::Repl {
+			dir,
+			recursive,
+			limit,
+			score,
+			exclude_videos,
+		} => commands::repl::run(&dir, recursive, limit, score, exclude_videos),
 	};
 
 	if let Err(e) = result {

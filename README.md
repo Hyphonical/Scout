@@ -9,22 +9,15 @@ Find images by what's _in_ them, not what you named the file. No cloud, no API k
 - [What's This About?](#whats-this-about)
 - [Why Does This Exist?](#why-does-this-exist)
 - [Features](#features-)
-- [Installation](#installation-)
-  - [Prerequisites](#prerequisites)
-  - [Build from Source](#build-from-source)
-  - [Download Pre-built Binaries](#download-pre-built-binaries)
-- [Model Setup](#model-setup)
 - [Quick Start](#quick-start-)
+- [Documentation](#documentation-)
 - [Usage](#usage)
   - [`scan` - Index Images](#scan---index-images)
   - [`search` - Find Images](#search---find-images)
+  - [`repl` - Interactive Search](#repl---interactive-search)
   - [`clean` - Remove Orphaned Sidecars](#clean---remove-orphaned-sidecars)
   - [Global Options](#global-options)
 - [Hardware Support](#hardware-support-)
-- [How It Works](#how-it-works-)
-- [Configuration](#configuration)
-- [Video Support](#video-support-)
-- [Troubleshooting](#troubleshooting-)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -52,87 +45,65 @@ So if you're the kind of person who has 10,000+ photos scattered across folders 
 - **Image-based search** 🖼️: Reverse image search using a reference photo
 - **Hybrid search** 🔀: Combine text + image queries with adjustable weighting
 - **Negative prompts** 🚫: Exclude unwanted content with `--not` flag
-- **Parallel processing** ⚡: Multi-threaded scanning with `--threads` (default: 2)
-- **Multiple output formats** 📊: Pretty (default), JSON, or plain text output
+- **REPL mode** 💬: Interactive search sessions without model reload overhead
 - **Video support** 🎬: Index video files by extracting key frames (requires FFmpeg)
 - **Recursive scanning** 📁: Index entire directory trees in one go
-- **Smart filtering** ⚙️: Set minimum dimensions, file sizes, exclude patterns
-- **Custom model paths** 🔧: Specify custom ONNX models via CLI or config file
-- **Configuration file** ⚙️: Persistent settings in `~/.scout/config.toml`
+- **Smart filtering** ⚙️: Exclude videos, set minimum resolution, file size limits
+- **Multiple output formats** 📊: Pretty (default), JSON, or plain text
+- **Custom model paths** 🔧: Specify custom ONNX models via CLI or environment
 - **Multiple backends** 🚀: Auto-detects best hardware (CUDA, TensorRT, CoreML, XNNPACK, or CPU)
-- **Sidecar storage** 💾: Embeddings stored alongside images, no central database to corrupt
+- **Sidecar storage** 💾: Embeddings stored alongside images, no central database
 - **Offline everything** 🔒: No internet required after initial model download
-- **Fast** ⚡: Batch processing and optimized inference (~50-200ms per image depending on hardware)
-- **Version tracking** 🔄: Automatically handles model upgrades across your index
+- **Fast** ⚡: Optimized inference (~50-200ms per image depending on hardware)
 - **Cross platform** 🌐: Works on Linux, macOS, Windows
-- **Portability remains** 📦: Move/copy your images and their `.scout/` sidecars go with them
-
-## Installation 📦
-
-### Prerequisites
-
-1. **Rust** (1.70+): Install from [rustup.rs](https://rustup.rs)
-2. **ONNX Runtime models**: See [models/Models.md](models/Models.md) for download instructions
-3. **FFmpeg** (Optional, for video support): Install from [FFmpeg website](https://ffmpeg.org) or package manager
-4. **CUDA/TensorRT DLLs** (Optional, NVIDIA GPU only): [ONNX Runtime GPU setup](https://onnxruntime.ai/docs/execution-providers/CUDA-ExecutionProvider.html)
-
-> **Video Support**: Scout uses FFmpeg via subprocess for video processing. If FFmpeg is not in your PATH, video features will be disabled with a clear message. Image search works without FFmpeg.
-
-### Build from source
-
-```bash
-git clone https://github.com/Hyphonical/Scout.git
-cd scout
-cargo build --release
-```
-
-> **Note:** Video support works automatically if FFmpeg is installed and in PATH. No build flags needed.
-
-Binary will be at `target/release/scout` (or `scout.exe` on Windows).
-
-### Download pre-built binaries
-
-Check the [Releases](https://github.com/Hyphonical/Scout/releases) page for pre-built binaries:
-- `scout-linux-x64.tar.gz` - Linux (x64)
-- `scout-macos-arm64.tar.gz` - macOS (Apple Silicon)
-- `scout-windows-x64.zip` - Windows (x64)
-
-**Video support**: Install FFmpeg on your system for video processing. See [FFmpeg Installation Guide](docs/INSTALL_FFMPEG.md).
+- **Portability** 📦: Move/copy images and `.scout/` sidecars travel with them
 
 ## Quick Start 🚀
 
+### 1. Install
+
 ```bash
 git clone https://github.com/Hyphonical/Scout.git
 cd scout
 cargo build --release
 ```
 
-The binary will be at `target/release/scout` (or `scout.exe` on Windows).
+Binary at `target/release/scout` (or `scout.exe` on Windows).
 
-### Model setup
+### 2. Get Models
 
-Download the three required model files into the `models/` directory:
+Download three model files into `models/` directory:
 - `vision_model_q4f16.onnx` (175 MB)
 - `text_model_q4f16.onnx` (665 MB)  
 - `tokenizer.json` (33 MB)
 
-**→ Full instructions with alternative models: [docs/MODELS.md](docs/MODELS.md)**
+**→ Full download instructions: [docs/MODELS.md](docs/MODELS.md)**
 
-### Quick Commands
+### 3. Index and Search
 
 ```bash
-# Index all images in a folder (recursively)
+# Index all images (recursive)
 scout scan -d ~/Photos -r
 
-# Search by text
+# Text search
 scout search "cat sleeping on keyboard" -d ~/Photos
 
-# Search by reference image
+# Image search
 scout search -i reference.jpg -d ~/Photos
 
-# Combine text + image (70% text, 30% image)
-scout search "vintage car" -i car.jpg -w 0.7 -d ~/Photos
+# Interactive mode
+scout repl -d ~/Photos -r
 ```
+
+## Documentation 📚
+
+- **[Getting Started](docs/getting-started.md)** - Installation, model setup, first steps
+- **[User Guide](docs/user-guide.md)** - Comprehensive feature documentation
+- **[Architecture](docs/architecture.md)** - Technical deep dive
+- **[Contributing](docs/contributing.md)** - Developer guide
+- **[Models](docs/MODELS.md)** - Model download and alternatives
+- **[Video Support](docs/INSTALL_FFMPEG.md)** - FFmpeg installation guide
+- **[Sidecar Format](docs/SIDECAR.md)** - Storage format details
 
 ## Usage
 
@@ -144,33 +115,25 @@ scout scan [OPTIONS]
 Options:
   -d, --dir <PATH>              Directory to scan [default: .]
   -r, --recursive               Scan subdirectories
-  -f, --force                   Reprocess already-indexed images
-  -t, --threads <N>             Number of parallel threads [default: 2] (1 = sequential)
-  --min-width <PIXELS>          Minimum image width [default: 64]
-  --min-height <PIXELS>         Minimum image height [default: 64]
-  --min-size <KB>               Minimum file size in KB [default: 0]
+  -f, --force                   Reprocess already-indexed files
+  --exclude-videos              Skip video files
+  --min-width <PIXELS>          Minimum image width
+  --min-height <PIXELS>         Minimum image height
+  --min-size <KB>               Minimum file size in KB
   --max-size <MB>               Maximum file size in MB
-  --exclude <PATTERNS>          Comma-separated exclude patterns
 ```
 
 **Examples:**
 ```bash
-# Scan with 4 parallel threads
-scout scan -d ./photos -r --threads 4
+# Basic recursive scan
+scout scan -d ./photos -r
 
-# Sequential processing (no parallelism, lower VRAM usage)
-scout scan -d ./photos -r --threads 1
+# Exclude videos
+scout scan -d ./photos -r --exclude-videos
 
 # With filtering
-scout scan -d ./photos -r --min-width 512 --exclude "thumbnails,cache"
+scout scan -d ./photos -r --min-width 512 --max-size 50
 ```
-
-**Note:** With multiple threads, each worker loads its own model instance. This speeds up processing but uses more VRAM on GPUs. Use `--threads 1` if you have limited VRAM.
-
-Scout creates a `.scout/` folder next to each directory containing images. Inside are `.msgpack` files (one per image) containing embeddings and metadata. This means:
-- No centralized database that can get corrupted
-- Embeddings travel with your images when you move/copy folders
-- Easy to delete (just remove `.scout/` folders)
 
 ### `search` - Find images
 
@@ -184,44 +147,65 @@ Options:
   -r, --recursive               Search subdirectories
   -n, --limit <N>               Max results to show [default: 10]
   -s, --score <FLOAT>           Minimum similarity score [default: 0.0]
-  -o, --open                    Open top result in default viewer
-  --include-ref                 Include reference image in results
-  -f, --format <FORMAT>         Output format: pretty, json, plain [default: pretty]
   --not <QUERY>                 Negative prompt to exclude content
+  --include-ref                 Include reference image in results
+  -f, --format <FORMAT>         Output format: pretty, json, plain
 ```
 
 **Examples:**
 
 ```bash
-# Text search with high threshold
-scout search "beach sunset" -s 0.15 -n 5
+# Text search
+scout search "beach sunset" -d ~/Photos -r
 
-# Reverse image search
-scout search -i ~/reference.jpg -d ~/Photos -r
+# Image search
+scout search -i reference.jpg -d ~/Photos
 
-# Combined: 30% text, 70% image
-scout search "red sports car" -i ferrari.jpg -w 0.3
+# Combined (30% text, 70% image)
+scout search "red car" -i ferrari.jpg -w 0.3
 
-# Search with negative prompt
+# With negative prompt
 scout search "woman on beach" --not "dog with frisbee"
-
-# JSON output for scripting
-scout search "cat" --format json > results.json
-
-# Plain text output
-scout search "sunset" --format plain | head -5
-
-# Search and open top result
-scout search "dog" -o
 ```
 
-**Similarity scores** range from -1 to 1 (higher = better match):
-- `0.15+`: Excellent matches
-- `0.08-0.15`: Good matches  
-- `<0.08`: Weak matches
+### `repl` - Interactive search
 
-> [!TIP]
-> The better and more elaborate your query, the higher the scores you'll see. Negative prompts reduce scores for matching content using semantic subtraction (score = positive - 0.7×negative).
+```bash
+scout repl [OPTIONS]
+
+Options:
+  -d, --dir <PATH>              Directory to search [default: .]
+  -r, --recursive               Search subdirectories
+  -n, --limit <N>               Max results per search [default: 10]
+  -s, --score <FLOAT>           Minimum similarity score [default: 0.0]
+  --exclude-videos              Skip video files
+```
+
+**Interactive mode:** Models load once, index cached, fast repeated searches.
+
+**Commands:**
+- Type any text to search
+- `help` - Show commands
+- `exit`, `quit`, `q` - Exit REPL
+
+**Example session:**
+```bash
+$ scout repl -d ~/Photos -r
+
+Scout REPL Mode
+Models and index loaded. Type queries or 'help' for commands.
+
+> sunset over mountains
+1. IMG_4523.jpg (0.234)
+2. vacation_2023.jpg (0.198)
+...
+
+> beach at sunset
+1. sunset_beach.jpg (0.287)
+...
+
+> exit
+```
 
 ### `clean` - Remove orphaned sidecars
 
@@ -231,52 +215,30 @@ scout clean [OPTIONS]
 Options:
   -d, --dir <PATH>     Directory to clean [default: .]
   -r, --recursive      Clean subdirectories
-  -y, --yes            Skip confirmation prompt
 ```
 
-Deletes `.scout/` sidecar files for images that no longer exist. Useful after moving/deleting photos.
-
-### `config` - Manage configuration
-
-```bash
-scout config [OPTIONS]
-
-Options:
-  --init    Create config file with defaults
-  --show    Show config file path
-```
-
-**Examples:**
-```bash
-# Create config file at ~/.scout/config.toml
-scout config --init
-
-# Show where config file should be
-scout config --show
-```
+Deletes `.scout/` sidecar files for images that no longer exist.
 
 ### Global options
 
 ```bash
 -v, --verbose                  Show debug output
 -p, --provider <TYPE>          Force execution provider [auto,cpu,cuda,tensorrt,coreml,xnnpack]
---vision-model <PATH>          Custom vision model ONNX file
---text-model <PATH>            Custom text model ONNX file
---tokenizer <PATH>             Custom tokenizer JSON file
---disable-video                Skip video files during scanning
+--model-dir <PATH>             Custom model directory
+--ffmpeg-path <PATH>           Custom FFmpeg executable path
 ```
 
 **Examples:**
 
 ```bash
 # Use custom models
-scout search "cat" --vision-model ./my_model.onnx --text-model ./my_text.onnx
+scout search "cat" --model-dir ./my_models
 
 # Force CPU execution
-scout scan -d ./photos --provider cpu
+scout scan -d ./photos --provider cpu --verbose
 
-# Verbose output with CUDA
-scout scan -d ./photos --provider cuda --verbose
+# Custom FFmpeg path
+scout scan -d ~/Videos -r --ffmpeg-path /opt/ffmpeg/bin/ffmpeg
 ```
 
 ## Hardware Support ⚡
@@ -295,117 +257,21 @@ Override with `--provider <type>` if needed. Use `--verbose` to see which provid
 
 ## How It Works 🧠
 
-1. **Scanning**: Scout reads images, resizes them to 512×512, and generates 1024-dimensional embeddings using a vision model
-2. **Storage**: Embeddings are saved as `.msgpack` files in `.scout/` folders next to your images  
-   → See [docs/SIDECAR.md](docs/SIDECAR.md) for detailed information about the sidecar format
-3. **Searching**: Your query (text/image/both) is converted to an embedding, then compared against all indexed images using cosine similarity
-4. **Ranking**: Results are sorted by similarity score (dot product of normalized vectors)
+1. **Scanning**: Resizes images to 512×512, generates 1024-dimensional embeddings using SigLIP2
+2. **Storage**: Embeddings saved as `.msgpack` files in `.scout/` folders (see [docs/SIDECAR.md](docs/SIDECAR.md))
+3. **Searching**: Query converted to embedding, compared via cosine similarity
+4. **Ranking**: Results sorted by similarity score (dot product of normalized vectors)
 
-The models are quantized to Q4F16 (4-bit weights, FP16 activations) for a good balance of speed, size, and accuracy. See [docs/MODELS.md](docs/MODELS.md) for alternatives.
-
-## Configuration
-
-Scout supports a configuration file at `~/.scout/config.toml` for persistent settings.
-
-Create it with: `scout config --init`
-
-```toml
-[scan]
-# Number of parallel threads (1 = sequential)
-threads = 2
-# Scan subdirectories by default
-recursive = false
-# Force reprocessing
-force = false
-
-[models]
-# Execution provider: "auto", "cuda", "tensorrt", "coreml", "xnnpack", or "cpu"
-# provider = "cuda"
-
-# Custom model paths (optional, defaults to models/ directory)
-# vision_model = "./models/vision_model_q4f16.onnx"
-# text_model = "./models/text_model_q4f16.onnx"
-# tokenizer = "./models/tokenizer.json"
-
-[search]
-# Default number of search results
-default_limit = 10
-# Minimum similarity score threshold
-min_score = 0.0
-# Negative prompt weight multiplier (0.0-1.0)
-negative_weight = 0.7
-```
-
-**Priority**: CLI arguments > config file > defaults
-
-Run `scout config --show` to see the config file path.
-
-## Video Support 🎬
-
-Scout can process video files by extracting key frames and indexing them. This requires FFmpeg to be installed on your system.
-
-### Installing FFmpeg
-
-**Windows:**
-```powershell
-choco install ffmpeg-full
-# or download from https://www.gyan.dev/ffmpeg/builds/
-```
-
-**macOS:**
-```bash
-brew install ffmpeg
-```
-
-**Linux:**
-```bash
-sudo apt install ffmpeg  # Debian/Ubuntu
-sudo dnf install ffmpeg  # Fedora
-sudo pacman -S ffmpeg    # Arch
-```
-
-### Verification
-
-```bash
-ffmpeg -version  # Should show FFmpeg 4.4 or newer
-scout scan -d ~/Videos -r  # Will process videos if FFmpeg found
-```
-
-If FFmpeg is not installed, Scout will skip video files and only process images. You'll see a one-time warning message.
-
-### Supported Formats
-
-`.mp4`, `.mkv`, `.avi`, `.mov`, `.webm`, `.wmv`, `.flv`, `.m4v`
-
-## Troubleshooting 🔧
-
-**"Vision model not found"**  
-→ Download models to `models/` directory. See [docs/MODELS.md](docs/MODELS.md)
-
-**"No results found"**  
-→ Run `scout scan -d <dir> -r` first to index images  
-→ Try lowering `--score` threshold or using broader search terms
-
-**Slow performance**  
-→ Check execution provider with `--verbose` flag  
-→ Ensure CUDA/CoreML/TensorRT is properly installed  
-→ Consider using smaller model variant (see docs/MODELS.md)
-**"X outdated sidecars found"**  
-→ Run `scout scan -f` to regenerate embeddings with current model version
+Models are quantized to Q4F16 (4-bit weights, FP16 activations) for speed/size/accuracy balance.
 
 ## Contributing
 
-This is a weekend project that got slightly out of hand. If you find bugs or have ideas, PRs are welcome! The codebase is intentionally kept simple and readable.
-
-Things I'd love help with:
-- Better test coverage
-- More export formats (JSON, CSV, HTML gallery)
-- Performance optimizations
+PRs welcome! See [docs/contributing.md](docs/contributing.md) for developer guide.
 
 ## License
 
-MIT - do whatever you want with it. If you build something cool on top of this, let me know!
+MIT - do whatever you want with it.
 
 ---
 
-Made with ☕ and questionable life choices (It's Rust and ONNX, what did you expect?). If you have 10,000 photos named `IMG_XXXX.jpg`, this is for you.
+Made with ☕ and Rust. If you have 10,000 photos named `IMG_XXXX.jpg`, this is for you.

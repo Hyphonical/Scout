@@ -29,7 +29,9 @@ fn scan_recursive(
 	recursive: bool,
 	results: &mut Vec<(PathBuf, PathBuf)>,
 ) {
-	let Ok(entries) = fs::read_dir(current) else { return };
+	let Ok(entries) = fs::read_dir(current) else {
+		return;
+	};
 
 	for entry in entries.filter_map(|e| e.ok()) {
 		let path = entry.path();
@@ -47,7 +49,9 @@ fn scan_recursive(
 }
 
 fn scan_sidecar_dir(scout_dir: &Path, media_dir: &Path, results: &mut Vec<(PathBuf, PathBuf)>) {
-	let Ok(entries) = fs::read_dir(scout_dir) else { return };
+	let Ok(entries) = fs::read_dir(scout_dir) else {
+		return;
+	};
 
 	for entry in entries.filter_map(|e| e.ok()) {
 		let path = entry.path();

@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use image::RgbImage;
 use serde::Deserialize;
 use std::io::Read;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::OnceLock;
 
@@ -12,11 +12,41 @@ use crate::ui;
 
 static FFMPEG_AVAILABLE: OnceLock<bool> = OnceLock::new();
 static FFPROBE_AVAILABLE: OnceLock<bool> = OnceLock::new();
+static CUSTOM_FFMPEG: OnceLock<PathBuf> = OnceLock::new();
+
+pub fn set_ffmpeg_path(path: PathBuf) {
+	let _ = CUSTOM_FFMPEG.set(path);
+}
+
+fn get_ffmpeg_binary() -> String {
+	if let Some(custom) = CUSTOM_FFMPEG.get() {
+		return custom.to_string_lossy().to_string();
+	}
+	"ffmpeg".to_string()
+}
+
+fn get_ffprobe_binary() -> String {
+	if let Some(custom) = CUSTOM_FFMPEG.get() {
+		// If custom ffmpeg path is set, look for ffprobe in same directory
+		if let Some(parent) = custom.parent() {
+			let ffprobe_path = parent.join("ffprobe");
+			if ffprobe_path.exists() {
+				return ffprobe_path.to_string_lossy().to_string();
+			}
+			// Try with .exe extension on Windows
+			let ffprobe_exe = parent.join("ffprobe.exe");
+			if ffprobe_exe.exists() {
+				return ffprobe_exe.to_string_lossy().to_string();
+			}
+		}
+	}
+	"ffprobe".to_string()
+}
 
 /// Check if FFmpeg is available in PATH
 pub fn is_available() -> bool {
 	*FFMPEG_AVAILABLE.get_or_init(|| {
-		Command::new("ffmpeg")
+		Command::new(get_ffmpeg_binary())
 			.arg("-version")
 			.stdout(Stdio::null())
 			.stderr(Stdio::null())
@@ -29,7 +59,7 @@ pub fn is_available() -> bool {
 /// Check if ffprobe is available in PATH
 fn is_ffprobe_available() -> bool {
 	*FFPROBE_AVAILABLE.get_or_init(|| {
-		Command::new("ffprobe")
+		Command::new(get_ffprobe_binary())
 			.arg("-version")
 			.stdout(Stdio::null())
 			.stderr(Stdio::null())
@@ -63,42 +93,48 @@ fn probe_video(path: &Path) -> Result<(f64, u32, u32, f64)> {
 	if !is_ffprobe_available() {
 		anyhow::bail!("ffprobe not found in PATH");
 	}
-	
-	let output = Command::new("ffprobe")
-		.arg("-v").arg("error")
-		.arg("-print_format").arg("json")
+
+	let output = Command::new(get_ffprobe_binary())
+		.arg("-v")
+		.arg("error")
+		.arg("-print_format")
+		.arg("json")
 		.arg("-show_format")
 		.arg("-show_streams")
 		.arg(path)
 		.output()
 		.context("Failed to run ffprobe")?;
-	
+
 	if !output.status.success() {
 		anyhow::bail!("ffprobe failed");
 	}
-	
-	let probe: ProbeOutput = serde_json::from_slice(&output.stdout)
-		.context("Failed to parse ffprobe output")?;
-	
-	let video_stream = probe.streams.iter()
+
+	let probe: ProbeOutput =
+		serde_json::from_slice(&output.stdout).context("Failed to parse ffprobe output")?;
+
+	let video_stream = probe
+		.streams
+		.iter()
 		.find(|s| s.codec_type == "video")
 		.context("No video stream found")?;
-	
+
 	let width = video_stream.width.context("Missing width")?;
 	let height = video_stream.height.context("Missing height")?;
-	
-	let duration: f64 = probe.format.duration
+
+	let duration: f64 = probe
+		.format
+		.duration
 		.context("Missing duration")?
 		.parse()
 		.context("Invalid duration")?;
-	
+
 	// Parse frame rate (format: "30/1" or "24000/1001")
 	let fps = if let Some(fps_str) = &video_stream.r_frame_rate {
 		parse_fraction(fps_str).unwrap_or(30.0)
 	} else {
 		30.0
 	};
-	
+
 	Ok((duration, width, height, fps))
 }
 
@@ -118,62 +154,76 @@ pub fn extract_frames(path: &Path, count: usize) -> Result<Vec<(f64, RgbImage)>>
 	if !is_available() {
 		anyhow::bail!("FFmpeg not found in PATH");
 	}
-	
+
 	if count == 0 {
 		anyhow::bail!("Frame count must be at least 1");
 	}
-	
-	ui::debug(&format!("Extracting {} frames from: {}", count, path.display()));
-	
+
+	ui::debug(&format!(
+		"Extracting {} frames from: {}",
+		count,
+		path.display()
+	));
+
 	let (duration, width, height, fps) = probe_video(path)?;
-	
+
 	if duration <= 0.0 {
 		anyhow::bail!("Invalid video duration: {:.2}s", duration);
 	}
-	
+
 	// Calculate timestamps for evenly-spaced frames
 	let interval = duration / count as f64;
-	let timestamps: Vec<f64> = (0..count)
-		.map(|i| (i as f64 + 0.5) * interval)
-		.collect();
-	
+	let timestamps: Vec<f64> = (0..count).map(|i| (i as f64 + 0.5) * interval).collect();
+
 	// Calculate frame numbers
-	let frame_numbers: Vec<usize> = timestamps.iter()
+	let frame_numbers: Vec<usize> = timestamps
+		.iter()
 		.map(|&ts| (ts * fps).round() as usize)
 		.collect();
-	
+
 	// Build select filter
-	let select_expr = frame_numbers.iter()
+	let select_expr = frame_numbers
+		.iter()
 		.map(|n| format!("eq(n,{})", n))
 		.collect::<Vec<_>>()
 		.join("+");
-	
-	ui::debug(&format!("Video: {:.1}s, {}x{}, {:.1}fps", duration, width, height, fps));
-	
+
+	ui::debug(&format!(
+		"Video: {:.1}s, {}x{}, {:.1}fps",
+		duration, width, height, fps
+	));
+
 	// Extract frames in one FFmpeg call
-	let mut child = Command::new("ffmpeg")
-		.arg("-i").arg(path)
-		.arg("-vf").arg(format!("select='{}'", select_expr))
-		.arg("-vsync").arg("0")
-		.arg("-f").arg("rawvideo")
-		.arg("-pix_fmt").arg("rgb24")
+	let mut child = Command::new(get_ffmpeg_binary())
+		.arg("-i")
+		.arg(path)
+		.arg("-vf")
+		.arg(format!("select='{}'", select_expr))
+		.arg("-vsync")
+		.arg("0")
+		.arg("-f")
+		.arg("rawvideo")
+		.arg("-pix_fmt")
+		.arg("rgb24")
 		.arg("-hide_banner")
-		.arg("-loglevel").arg("error")
+		.arg("-loglevel")
+		.arg("error")
 		.arg("pipe:1")
 		.stdout(Stdio::piped())
 		.stderr(Stdio::piped())
 		.spawn()
 		.context("Failed to spawn FFmpeg")?;
-	
+
 	// Read all frame data
 	let mut frame_data = Vec::new();
 	if let Some(mut stdout) = child.stdout.take() {
-		stdout.read_to_end(&mut frame_data)
+		stdout
+			.read_to_end(&mut frame_data)
 			.context("Failed to read frames from FFmpeg")?;
 	}
-	
+
 	let status = child.wait().context("FFmpeg process failed")?;
-	
+
 	if !status.success() {
 		let mut stderr = String::new();
 		if let Some(mut err) = child.stderr {
@@ -181,29 +231,29 @@ pub fn extract_frames(path: &Path, count: usize) -> Result<Vec<(f64, RgbImage)>>
 		}
 		anyhow::bail!("FFmpeg failed: {}", stderr.trim());
 	}
-	
+
 	// Parse frames
 	let frame_size = (width * height * 3) as usize;
 	let actual_count = frame_data.len() / frame_size;
-	
+
 	if actual_count == 0 {
 		anyhow::bail!("No frames extracted");
 	}
-	
+
 	let mut frames = Vec::new();
 	for (i, chunk) in frame_data.chunks_exact(frame_size).enumerate() {
 		if i >= timestamps.len() {
 			break;
 		}
-		
+
 		let image = RgbImage::from_raw(width, height, chunk.to_vec())
 			.context("Failed to create image from frame data")?;
-		
+
 		frames.push((timestamps[i], image));
 	}
-	
+
 	ui::debug(&format!("Extracted {} frames", frames.len()));
-	
+
 	Ok(frames)
 }
 

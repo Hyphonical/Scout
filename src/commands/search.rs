@@ -26,7 +26,11 @@ pub fn run(
 	limit: usize,
 	min_score: f32,
 	open_first: bool,
+	include_ref: bool,
+	exclude_videos: bool,
 ) -> Result<()> {
+	let search_start = std::time::Instant::now();
+
 	// Build query embedding
 	let mut models = Models::new()?;
 
@@ -76,21 +80,23 @@ pub fn run(
 	let mut outdated = 0;
 
 	for (sidecar_path, media_dir) in sidecars {
-		let Ok(sidecar) = storage::load(&sidecar_path) else { continue };
-		
+		let Ok(sidecar) = storage::load(&sidecar_path) else {
+			continue;
+		};
+
 		if !sidecar.is_current_version() {
 			outdated += 1;
 		}
-		
+
 		match sidecar {
 			storage::Sidecar::Image(img) => {
 				let mut score = query_emb.similarity(&img.embedding());
-				
+
 				if let Some(ref neg_emb) = negative_emb {
 					let neg_score = neg_emb.similarity(&img.embedding());
 					score = score - (neg_score * NEGATIVE_WEIGHT);
 				}
-				
+
 				if score >= min_score {
 					let image_path = media_dir.join(img.filename());
 					matches.push(Match {
@@ -101,24 +107,28 @@ pub fn run(
 				}
 			}
 			storage::Sidecar::Video(vid) => {
+				if exclude_videos {
+					continue;
+				}
+
 				// Find best frame
 				let mut best_score = 0.0;
 				let mut best_timestamp = 0.0;
-				
+
 				for (timestamp, frame_emb) in vid.frames() {
 					let mut score = query_emb.similarity(&frame_emb);
-					
+
 					if let Some(ref neg_emb) = negative_emb {
 						let neg_score = neg_emb.similarity(&frame_emb);
 						score = score - (neg_score * NEGATIVE_WEIGHT);
 					}
-					
+
 					if score > best_score {
 						best_score = score;
 						best_timestamp = timestamp;
 					}
 				}
-				
+
 				if best_score >= min_score {
 					let video_path = media_dir.join(vid.filename());
 					matches.push(Match {
@@ -138,6 +148,22 @@ pub fn run(
 		));
 	}
 
+	// Filter out reference image if not including it
+	if !include_ref {
+		if let Some(ref_path) = query_image {
+			if let Ok(canonical_ref) = ref_path.canonicalize() {
+				let canonical_ref_str = canonical_ref.to_string_lossy().to_string();
+				matches.retain(|m| {
+					if let Ok(canonical_match) = Path::new(&m.path).canonicalize() {
+						canonical_match.to_string_lossy() != canonical_ref_str
+					} else {
+						true
+					}
+				});
+			}
+		}
+	}
+
 	matches.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
 	matches.truncate(limit);
 
@@ -151,11 +177,14 @@ pub fn run(
 	for (i, m) in matches.iter().enumerate() {
 		let path = Path::new(&m.path);
 
-		let link = ui::log::path_link(path);
+		let link = ui::log::path_link(path, 50);
 		let percentage = (m.score * 100.0).round() as u32;
-		
+
 		let timestamp_str = if let Some(ts) = m.timestamp {
-			format!(" @ {}", crate::processing::video::format_timestamp(ts).bright_yellow())
+			format!(
+				" @ {}",
+				crate::processing::video::format_timestamp(ts).bright_yellow()
+			)
 		} else {
 			String::new()
 		};
@@ -170,8 +199,27 @@ pub fn run(
 		);
 	}
 
+	let search_duration = search_start.elapsed().as_millis() as f32;
+
 	println!();
-	ui::success(&format!("Found {} matches", matches.len()));
+
+	// Low score warning
+	if !matches.is_empty() && matches[0].score < 0.10 {
+		ui::warn("Top result has low similarity (<10%)");
+		println!();
+		println!("  {} Try these techniques:", "💡".bright_blue().bold());
+		println!("     • Add more descriptive details");
+		println!("     • Use full sentences: \"Woman with red hair sitting on bench\"");
+		println!("     • Prefix with \"Image of...\" or \"Photo of...\"");
+		println!("     • Add a reference image with --image and low --weight");
+		println!();
+	}
+
+	ui::success(&format!(
+		"Found {} matches in {:.0}ms",
+		matches.len(),
+		search_duration
+	));
 
 	if open_first && !matches.is_empty() {
 		if let Err(e) = open::that(&matches[0].path) {

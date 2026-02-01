@@ -26,6 +26,9 @@ pub struct Cli {
 	#[arg(long, global = true, help = "Path to models directory")]
 	pub model_dir: Option<PathBuf>,
 
+	#[arg(long, global = true, help = "Path to FFmpeg binary")]
+	pub ffmpeg_path: Option<PathBuf>,
+
 	#[command(subcommand)]
 	pub command: Command,
 }
@@ -48,6 +51,9 @@ pub enum Command {
 
 		#[arg(long, help = "Maximum file size in MB")]
 		max_size: Option<u64>,
+
+		#[arg(long, help = "Skip video files")]
+		exclude_videos: bool,
 	},
 
 	/// Search indexed images
@@ -58,7 +64,12 @@ pub enum Command {
 		#[arg(short, long, help = "Reference image path")]
 		image: Option<PathBuf>,
 
-		#[arg(short, long, default_value_t = 0.5, help = "Text weight when combining text+image (0.0-1.0)")]
+		#[arg(
+			short,
+			long,
+			default_value_t = 0.5,
+			help = "Text weight when combining text+image (0.0-1.0)"
+		)]
 		weight: f32,
 
 		#[arg(long, help = "Negative query to exclude")]
@@ -78,6 +89,12 @@ pub enum Command {
 
 		#[arg(short, long)]
 		open: bool,
+
+		#[arg(long, help = "Include reference image in results")]
+		include_ref: bool,
+
+		#[arg(long, help = "Exclude videos from results")]
+		exclude_videos: bool,
 	},
 
 	/// Remove orphaned sidecars
@@ -87,5 +104,23 @@ pub enum Command {
 
 		#[arg(short, long)]
 		recursive: bool,
+	},
+
+	/// Interactive search mode
+	Repl {
+		#[arg(short, long, default_value = ".")]
+		dir: PathBuf,
+
+		#[arg(short, long)]
+		recursive: bool,
+
+		#[arg(short = 'n', long, default_value_t = crate::config::DEFAULT_LIMIT)]
+		limit: usize,
+
+		#[arg(short, long, default_value_t = crate::config::DEFAULT_MIN_SCORE)]
+		score: f32,
+
+		#[arg(long, help = "Exclude videos from results")]
+		exclude_videos: bool,
 	},
 }

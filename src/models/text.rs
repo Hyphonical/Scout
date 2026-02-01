@@ -15,8 +15,8 @@ pub struct TextModel {
 
 impl TextModel {
 	pub fn load(model_path: &Path, tokenizer_path: &Path) -> Result<Self> {
-		let session = crate::runtime::create_session(model_path)
-			.context("Failed to load text model")?;
+		let session =
+			crate::runtime::create_session(model_path).context("Failed to load text model")?;
 
 		let tokenizer = Tokenizer::from_file(tokenizer_path)
 			.map_err(|e| anyhow::anyhow!("Failed to load tokenizer: {}", e))?;
@@ -25,7 +25,9 @@ impl TextModel {
 	}
 
 	pub fn encode(&mut self, text: &str) -> Result<Embedding> {
-		let encoding = self.tokenizer.encode(text, true)
+		let encoding = self
+			.tokenizer
+			.encode(text, true)
 			.map_err(|e| anyhow::anyhow!("Tokenization failed: {}", e))?;
 
 		let input_ids: Vec<i64> = encoding.get_ids().iter().map(|&x| x as i64).collect();
@@ -40,7 +42,8 @@ impl TextModel {
 }
 
 fn extract_embedding(outputs: &ort::session::SessionOutputs) -> Result<Vec<f32>> {
-	let pooler = outputs.get("pooler_output")
+	let pooler = outputs
+		.get("pooler_output")
 		.context("No pooler output found")?;
 
 	let (shape, data) = pooler.try_extract_tensor::<f32>()?;

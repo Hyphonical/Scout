@@ -1,7 +1,7 @@
 //! Application configuration and constants
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
 
 static CUSTOM_MODEL_DIR: OnceLock<PathBuf> = OnceLock::new();

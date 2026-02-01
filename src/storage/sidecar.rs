@@ -47,15 +47,15 @@ impl ImageSidecar {
 			embedding: embedding.as_slice().to_vec(),
 		}
 	}
-	
+
 	pub fn embedding(&self) -> Embedding {
 		Embedding::raw(self.embedding.clone())
 	}
-	
+
 	pub fn filename(&self) -> &str {
 		&self.filename
 	}
-	
+
 	pub fn is_current_version(&self) -> bool {
 		self.version == VERSION
 	}
@@ -67,23 +67,27 @@ impl VideoSidecar {
 			version: VERSION.to_string(),
 			filename,
 			hash: hash.as_str().to_string(),
-			frames: frames.into_iter().map(|(ts, emb)| VideoFrame {
-				timestamp: ts,
-				embedding: emb.as_slice().to_vec(),
-			}).collect(),
+			frames: frames
+				.into_iter()
+				.map(|(ts, emb)| VideoFrame {
+					timestamp: ts,
+					embedding: emb.as_slice().to_vec(),
+				})
+				.collect(),
 		}
 	}
-	
+
 	pub fn frames(&self) -> Vec<(f64, Embedding)> {
-		self.frames.iter()
+		self.frames
+			.iter()
 			.map(|f| (f.timestamp, Embedding::raw(f.embedding.clone())))
 			.collect()
 	}
-	
+
 	pub fn filename(&self) -> &str {
 		&self.filename
 	}
-	
+
 	pub fn is_current_version(&self) -> bool {
 		self.version == VERSION
 	}
@@ -96,7 +100,7 @@ impl Sidecar {
 			Sidecar::Video(vid) => vid.filename(),
 		}
 	}
-	
+
 	pub fn is_current_version(&self) -> bool {
 		match self {
 			Sidecar::Image(img) => img.is_current_version(),
@@ -126,20 +130,21 @@ pub fn save_video(sidecar: &VideoSidecar, media_dir: &Path, hash: &FileHash) -> 
 /// Load sidecar (auto-detect type)
 pub fn load(path: &Path) -> Result<Sidecar> {
 	let bytes = fs::read(path).context("Read failed")?;
-	
+
 	// Try video first
 	if let Ok(video) = rmp_serde::from_slice::<VideoSidecar>(&bytes) {
 		return Ok(Sidecar::Video(video));
 	}
-	
+
 	// Fall back to image
-	let image = rmp_serde::from_slice::<ImageSidecar>(&bytes)
-		.context("Deserialize failed")?;
+	let image = rmp_serde::from_slice::<ImageSidecar>(&bytes).context("Deserialize failed")?;
 	Ok(Sidecar::Image(image))
 }
 
 pub fn build_path(media_dir: &Path, hash: &FileHash) -> PathBuf {
-	media_dir.join(SIDECAR_DIR).join(format!("{}.{}", hash.as_str(), SIDECAR_EXT))
+	media_dir
+		.join(SIDECAR_DIR)
+		.join(format!("{}.{}", hash.as_str(), SIDECAR_EXT))
 }
 
 fn ensure_dir(path: &Path) -> Result<()> {

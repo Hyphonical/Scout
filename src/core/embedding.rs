@@ -21,19 +21,17 @@ impl Embedding {
 
 	/// Cosine similarity [0.0, 1.0]
 	pub fn similarity(&self, other: &Self) -> f32 {
-		self.0.iter()
-			.zip(other.0.iter())
-			.map(|(a, b)| a * b)
-			.sum()
+		self.0.iter().zip(other.0.iter()).map(|(a, b)| a * b).sum()
 	}
 
 	/// Weighted combination of two embeddings
 	pub fn blend(a: &Self, b: &Self, weight_a: f32) -> Self {
 		let weight_b = 1.0 - weight_a;
-		let combined: Vec<f32> = a.0.iter()
-			.zip(b.0.iter())
-			.map(|(av, bv)| av * weight_a + bv * weight_b)
-			.collect();
+		let combined: Vec<f32> =
+			a.0.iter()
+				.zip(b.0.iter())
+				.map(|(av, bv)| av * weight_a + bv * weight_b)
+				.collect();
 		Self::new(combined)
 	}
 }
