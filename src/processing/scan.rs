@@ -38,6 +38,7 @@ pub struct MediaFile {
     pub path: PathBuf,
     pub filename: String,
     pub hash: FileHash,
+    #[allow(dead_code)]
     pub media_type: MediaType,
 }
 
