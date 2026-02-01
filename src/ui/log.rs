@@ -7,13 +7,19 @@ use std::sync::atomic::{AtomicBool, Ordering};
 static VERBOSE: AtomicBool = AtomicBool::new(false);
 
 const SLOGANS: &[&str] = &[
-	"Finding pixels in a digital haystack",
-	"Teaching computers to see your vibe",
-	"Semantic search, but make it fast",
-	"Your images, now searchable",
-	"AI-powered. Human-approved.",
-	"Making CTRL+F jealous since 2024",
+	"Semantic search but cooler",
 	"Where embeddings meet aesthetics",
+	"BEEP. BOOP. Done!",
+	"Powered by some oxidizing C clone",
+	"We make IMG_404 found",
+	"@Grok, where is this image?",
+	"Because CTRL+F is soo 2010s",
+	"Enhance! Enhance!",
+	"I know what you did last screenshot °_°",
+	"This folder better contain cats! =^..^=",
+	"That's not SFW...",
+	"\"Trust me bro, it's in here\"",
+	"Ahw a Chihuahua!... Oh no wait, it's a muffin"
 ];
 
 pub fn random_slogan() -> &'static str {
@@ -38,15 +44,15 @@ pub fn info(msg: &str) {
 }
 
 pub fn success(msg: &str) {
-	println!("{} {}", "✓".bright_blue().bold(), msg.bright_white());
+	println!("{} {}", "✓".bright_green().bold(), msg.bright_white());
 }
 
 pub fn warn(msg: &str) {
-	println!("{} {}", "⚠".bright_blue().bold(), msg.bright_white());
+	println!("{} {}", "⚠".bright_yellow().bold(), msg.bright_white());
 }
 
 pub fn error(msg: &str) {
-	println!("{} {}", "✗".red().bold(), msg.bright_white());
+	println!("{} {}", "✗".bright_red().bold(), msg.bright_white());
 }
 
 pub fn debug(msg: &str) {
