@@ -20,6 +20,7 @@ pub const MAX_QUERY_TOKENS: usize = 64; // SigLIP2 text encoder max sequence len
 // === Storage ===
 pub const SIDECAR_DIR: &str = ".scout";
 pub const SIDECAR_EXT: &str = "msgpack";
+pub const CLUSTERS_FILE: &str = "clusters.msgpack";
 
 // === File Extensions ===
 pub const IMAGE_EXTENSIONS: &[&str] = &[
@@ -90,4 +91,3 @@ pub fn get_text_model_path() -> Option<PathBuf> {
 pub fn get_tokenizer_path() -> Option<PathBuf> {
 	models_dir().map(|d| d.join(TOKENIZER))
 }
-

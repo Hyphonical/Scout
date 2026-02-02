@@ -15,6 +15,7 @@ use crate::ui;
 pub fn cluster_embeddings(
 	sidecars: Vec<(PathBuf, Sidecar)>,
 	params: ClusterParams,
+	use_umap: bool,
 ) -> Result<ClusterDatabase> {
 	if sidecars.is_empty() {
 		anyhow::bail!("No embeddings found to cluster");
@@ -23,7 +24,8 @@ pub fn cluster_embeddings(
 	ui::info(&format!("Clustering {} images", sidecars.len()));
 
 	// Extract embeddings and build lookup maps
-	let mut embeddings_2d: Vec<Vec<f32>> = Vec::with_capacity(sidecars.len());
+	ui::debug("Extracting embeddings...");
+	let mut embeddings: Vec<Embedding> = Vec::with_capacity(sidecars.len());
 	let mut hash_to_idx: HashMap<String, usize> = HashMap::new();
 	let mut idx_to_hash: Vec<String> = Vec::with_capacity(sidecars.len());
 
@@ -31,10 +33,24 @@ pub fn cluster_embeddings(
 		let hash = sidecar.hash().to_string();
 		let embedding = sidecar.primary_embedding();
 
-		embeddings_2d.push(embedding.0.clone());
+		embeddings.push(embedding);
 		hash_to_idx.insert(hash.clone(), idx);
 		idx_to_hash.push(hash);
 	}
+
+	// Optionally reduce dimensions with UMAP
+	let embeddings_2d: Vec<Vec<f32>> = if use_umap && sidecars.len() > 50 {
+		ui::debug(&format!(
+			"Dataset size ({}) > 50, applying UMAP",
+			sidecars.len()
+		));
+		crate::processing::umap::reduce_embeddings(&embeddings, 50, 15)?
+	} else {
+		if use_umap {
+			ui::debug("Dataset too small for UMAP (<50), using raw embeddings");
+		}
+		embeddings.iter().map(|e| e.0.clone()).collect()
+	};
 
 	// Configure HDBSCAN
 	let hyper_params = match params.min_samples {
@@ -48,6 +64,7 @@ pub fn cluster_embeddings(
 	};
 
 	// Run clustering
+	ui::debug("Running HDBSCAN...");
 	let clusterer = Hdbscan::new(&embeddings_2d, hyper_params);
 	let labels = clusterer.cluster().context("HDBSCAN clustering failed")?;
 
@@ -60,14 +77,13 @@ pub fn cluster_embeddings(
 		if label == -1 {
 			noise_hashes.push(hash.clone());
 		} else {
-			cluster_map
-				.entry(label)
-				.or_default()
-				.push(hash.clone());
+			cluster_map.entry(label).or_default().push(hash.clone());
 		}
 	}
 
 	// Build clusters with representatives and cohesion scores
+	// Use ORIGINAL embeddings for quality metrics, not reduced ones
+	ui::debug("Computing cluster metrics...");
 	let clusters: Vec<Cluster> = cluster_map
 		.into_par_iter()
 		.map(|(cluster_id, hashes)| {
@@ -91,14 +107,16 @@ pub fn cluster_embeddings(
 		cluster.id = new_id;
 	}
 
-	Ok(ClusterDatabase {
+	let db = ClusterDatabase {
 		version: env!("CARGO_PKG_VERSION").to_string(),
 		timestamp: chrono::Utc::now().to_rfc3339(),
 		params,
 		clusters,
 		noise: noise_hashes,
 		total_images: sidecars.len(),
-	})
+	};
+
+	Ok(db)
 }
 
 /// Find the most representative image in a cluster (closest to centroid)
@@ -109,7 +127,11 @@ fn find_representative(
 ) -> String {
 	let embeddings: Vec<Embedding> = hashes
 		.iter()
-		.filter_map(|h| hash_to_idx.get(h).map(|&idx| sidecars[idx].1.primary_embedding()))
+		.filter_map(|h| {
+			hash_to_idx
+				.get(h)
+				.map(|&idx| sidecars[idx].1.primary_embedding())
+		})
 		.collect();
 
 	if embeddings.is_empty() {
@@ -129,7 +151,9 @@ fn find_representative(
 				.get(*b)
 				.map(|&idx| centroid.similarity(&sidecars[idx].1.primary_embedding()))
 				.unwrap_or(0.0);
-			sim_a.partial_cmp(&sim_b).unwrap_or(std::cmp::Ordering::Equal)
+			sim_a
+				.partial_cmp(&sim_b)
+				.unwrap_or(std::cmp::Ordering::Equal)
 		})
 		.cloned()
 		.unwrap_or_else(|| hashes[0].clone())
@@ -147,7 +171,11 @@ fn compute_cohesion(
 
 	let embeddings: Vec<Embedding> = hashes
 		.iter()
-		.filter_map(|h| hash_to_idx.get(h).map(|&idx| sidecars[idx].1.primary_embedding()))
+		.filter_map(|h| {
+			hash_to_idx
+				.get(h)
+				.map(|&idx| sidecars[idx].1.primary_embedding())
+		})
 		.collect();
 
 	let mut total_similarity = 0.0;

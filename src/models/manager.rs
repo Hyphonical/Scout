@@ -16,24 +16,34 @@ pub struct Models {
 
 impl Models {
 	pub fn new() -> Result<Self> {
-		let vision_path = config::get_vision_model_path().context(
-			format!("Vision model not found. Ensure {} exists", config::VISION_MODEL),
-		)?;
-		let text_path = config::get_text_model_path().context(
-			format!("Text model not found. Ensure {} exists", config::TEXT_MODEL),
-		)?;
-		let tokenizer_path = config::get_tokenizer_path()
-			.context(format!("Tokenizer not found. Ensure {} exists", config::TOKENIZER))?;
+		let vision_path = config::get_vision_model_path().context(format!(
+			"Vision model not found. Ensure {} exists",
+			config::VISION_MODEL
+		))?;
+		let text_path = config::get_text_model_path().context(format!(
+			"Text model not found. Ensure {} exists",
+			config::TEXT_MODEL
+		))?;
+		let tokenizer_path = config::get_tokenizer_path().context(format!(
+			"Tokenizer not found. Ensure {} exists",
+			config::TOKENIZER
+		))?;
 
 		// Verify files actually exist
 		if !vision_path.exists() {
-			anyhow::bail!("Vision model file does not exist: {}", vision_path.display());
+			anyhow::bail!(
+				"Vision model file does not exist: {}",
+				vision_path.display()
+			);
 		}
 		if !text_path.exists() {
 			anyhow::bail!("Text model file does not exist: {}", text_path.display());
 		}
 		if !tokenizer_path.exists() {
-			anyhow::bail!("Tokenizer file does not exist: {}", tokenizer_path.display());
+			anyhow::bail!(
+				"Tokenizer file does not exist: {}",
+				tokenizer_path.display()
+			);
 		}
 
 		Ok(Self {

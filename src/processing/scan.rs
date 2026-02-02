@@ -5,6 +5,8 @@ use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 
+use rayon::prelude::*;
+
 use crate::config::SIDECAR_DIR;
 use crate::core::{FileHash, MediaType};
 use crate::ui;
@@ -57,44 +59,99 @@ pub fn scan_directory(
 	min_resolution: Option<u32>,
 	max_size_mb: Option<u64>,
 ) -> ScanResult {
-	let mut to_process = Vec::new();
-	let mut already_indexed = 0;
-	let mut outdated = 0;
-	let mut filtered = 0;
-	let mut seen = HashSet::new();
+	// 1. Discovery Phase (Sequential, fast IO)
+	ui::debug("Scanning directory structure...");
+	let candidates = discover_files(root, recursive);
+	ui::debug(&format!("Found {} candidate files", candidates.len()));
 
-	scan_recursive(
-		root,
-		recursive,
-		force,
-		min_resolution,
-		max_size_mb,
-		&mut to_process,
-		&mut already_indexed,
-		&mut outdated,
-		&mut filtered,
-		&mut seen,
-	);
+	// 2. Processing Phase (Parallel, CPU intensive)
+	ui::debug("Processing files (metadata & hashing)...");
+
+	let already_indexed = std::sync::atomic::AtomicUsize::new(0);
+	let outdated = std::sync::atomic::AtomicUsize::new(0);
+	let filtered = std::sync::atomic::AtomicUsize::new(0);
+
+	let to_process: Vec<MediaFile> = candidates
+		.into_par_iter()
+		.filter_map(|path| {
+			// Filters (Size/Resolution)
+			if let Some(max_mb) = max_size_mb {
+				if let Ok(metadata) = fs::metadata(&path) {
+					let size_mb = metadata.len() / 1024 / 1024;
+					if size_mb > max_mb {
+						filtered.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+						return None;
+					}
+				}
+			}
+
+			if let Some(min_res) = min_resolution {
+				if let Ok(img) = image::image_dimensions(&path) {
+					let (width, height) = img;
+					if width.min(height) < min_res {
+						filtered.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+						return None;
+					}
+				}
+			}
+
+			// Hashing
+			let Ok(hash) = FileHash::compute(&path) else {
+				ui::warn(&format!("Failed to hash: {}", path.display()));
+				return None;
+			};
+
+			// Existence Check
+			if !force {
+				let media_dir = path.parent().unwrap_or(&path);
+				if let Some(sidecar_path) = crate::storage::find(media_dir, &hash) {
+					if let Ok(sidecar) = crate::storage::load(&sidecar_path) {
+						if sidecar.is_current_version() {
+							already_indexed.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+							return None;
+						} else {
+							outdated.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+						}
+					}
+				}
+			}
+
+			let filename = path
+				.file_name()
+				.and_then(|n| n.to_str())
+				.unwrap_or("unknown")
+				.to_string();
+
+			let media_type = MediaType::detect(&path)?;
+
+			Some(MediaFile {
+				path,
+				filename,
+				hash,
+				media_type,
+			})
+		})
+		.collect();
 
 	ScanResult {
 		to_process,
-		already_indexed,
-		outdated,
-		filtered,
+		already_indexed: already_indexed.load(std::sync::atomic::Ordering::Relaxed),
+		outdated: outdated.load(std::sync::atomic::Ordering::Relaxed),
+		filtered: filtered.load(std::sync::atomic::Ordering::Relaxed),
 	}
 }
 
-#[allow(clippy::too_many_arguments)]
-fn scan_recursive(
+fn discover_files(root: &Path, recursive: bool) -> Vec<PathBuf> {
+	let mut files = Vec::new();
+	let mut seen = HashSet::new();
+	discover_recursive(root, recursive, &mut files, &mut seen);
+	files
+}
+
+fn discover_recursive(
 	current: &Path,
 	recursive: bool,
-	force: bool,
-	min_resolution: Option<u32>,
-	max_size_mb: Option<u64>,
-	to_process: &mut Vec<MediaFile>,
-	already_indexed: &mut usize,
-	outdated: &mut usize,
-	filtered: &mut usize,
+	files: &mut Vec<PathBuf>,
 	seen: &mut HashSet<PathBuf>,
 ) {
 	let ignore_patterns = load_scoutignore(current);
@@ -106,112 +163,25 @@ fn scan_recursive(
 	for entry in entries.filter_map(|e| e.ok()) {
 		let path = entry.path();
 
-		// Check ignore patterns
-		if !ignore_patterns.is_empty() && is_ignored(&path, &ignore_patterns) {
-			ui::debug(&format!("Ignored: {}", path.display()));
+		// Check basic ignore rules
+		if path.file_name() == Some(std::ffi::OsStr::new(SIDECAR_DIR)) {
 			continue;
 		}
 
-		// Skip .scout directories
-		if path.file_name() == Some(std::ffi::OsStr::new(SIDECAR_DIR)) {
+		if !ignore_patterns.is_empty() && is_ignored(&path, &ignore_patterns) {
 			continue;
 		}
 
 		if path.is_dir() {
 			if recursive {
-				scan_recursive(
-					&path,
-					recursive,
-					force,
-					min_resolution,
-					max_size_mb,
-					to_process,
-					already_indexed,
-					outdated,
-					filtered,
-					seen,
-				);
+				discover_recursive(&path, recursive, files, seen);
 			}
-		} else if let Some(media_type) = MediaType::detect(&path) {
-			let Ok(canonical) = path.canonicalize() else {
-				continue;
-			};
-
-			if !seen.insert(canonical.clone()) {
-				continue;
-			}
-
-			// Add size filter
-			if let Some(max_mb) = max_size_mb {
-				if let Ok(metadata) = fs::metadata(&canonical) {
-					let size_mb = metadata.len() / 1024 / 1024;
-					if size_mb > max_mb {
-						*filtered += 1;
-						ui::debug(&format!(
-							"Filtered (too large): {} ({}MB)",
-							canonical.display(),
-							size_mb
-						));
-						continue;
-					}
+		} else if MediaType::detect(&path).is_some() {
+			if let Ok(canonical) = path.canonicalize() {
+				if seen.insert(canonical.clone()) {
+					files.push(canonical);
 				}
 			}
-
-			// Add resolution filter
-			if let Some(min_res) = min_resolution {
-				if let Ok(img) = image::image_dimensions(&canonical) {
-					let (width, height) = img;
-					let shortest = width.min(height);
-					if shortest < min_res {
-						*filtered += 1;
-						ui::debug(&format!(
-							"Filtered (too small): {} ({}x{})",
-							canonical.display(),
-							width,
-							height
-						));
-						continue;
-					}
-				}
-			}
-
-			let Ok(hash) = FileHash::compute(&canonical) else {
-				ui::warn(&format!("Failed to hash: {}", canonical.display()));
-				continue;
-			};
-
-			ui::debug(&format!(
-				"Hashed {} -> {}",
-				canonical.file_name().unwrap().to_string_lossy(),
-				hash.short()
-			));
-
-			if !force {
-				let media_dir = canonical.parent().unwrap_or(&canonical);
-				if let Some(sidecar_path) = crate::storage::find(media_dir, &hash) {
-					if let Ok(sidecar) = crate::storage::load(&sidecar_path) {
-						if sidecar.is_current_version() {
-							*already_indexed += 1;
-							continue;
-						} else {
-							*outdated += 1;
-						}
-					}
-				}
-			}
-
-			let filename = canonical
-				.file_name()
-				.and_then(|n| n.to_str())
-				.unwrap_or("unknown")
-				.to_string();
-
-			to_process.push(MediaFile {
-				path: canonical,
-				filename,
-				hash,
-				media_type,
-			});
 		}
 	}
 }

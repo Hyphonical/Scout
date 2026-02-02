@@ -8,7 +8,7 @@ use std::time::Instant;
 use anyhow::{Context, Result};
 use colored::*;
 
-use crate::cli::OutputFormat;
+use crate::config::{CLUSTERS_FILE, SIDECAR_DIR};
 use crate::core::{ClusterDatabase, ClusterParams};
 use crate::processing::cluster::cluster_embeddings;
 use crate::storage::index;
@@ -17,12 +17,57 @@ use crate::ui;
 pub fn run(
 	dir: &Path,
 	recursive: bool,
+	force: bool,
 	min_cluster_size: usize,
 	min_samples: Option<usize>,
-	output_format: OutputFormat,
-	save: bool,
+	use_umap: bool,
 ) -> Result<()> {
-	ui::info(&format!("Loading embeddings from {}", ui::path_link(dir, 40)));
+	let clusters_path = dir.join(SIDECAR_DIR).join(CLUSTERS_FILE);
+
+	let start = Instant::now();
+
+	ui::debug(&format!(
+		"Starting clustering: dir={}, recursive={}, force={}",
+		dir.display(),
+		recursive,
+		force
+	));
+
+	// Check for cached clusters
+	if !force {
+		if let Some(cached_db) = load_cached_clusters(&clusters_path) {
+			ui::debug(&format!(
+				"Found cached clusters: {} clusters, {} images",
+				cached_db.clusters.len(),
+				cached_db.total_images
+			));
+			ui::success("Using cached clusters");
+
+			// Load sidecars to build hash-to-path lookup
+			ui::debug("Loading sidecars for cached cluster display...");
+			let sidecars = index::load_all_sidecars(dir, recursive);
+			let hash_to_path: HashMap<String, PathBuf> = sidecars
+				.iter()
+				.map(|(path, sc)| (sc.hash().to_string(), path.clone()))
+				.collect();
+
+			print_clusters(&cached_db, &hash_to_path);
+			println!(
+				"\n{}",
+				format!("Clustered at: {}", cached_db.timestamp).dimmed()
+			);
+			println!("{}", "Run with --force to recluster".dimmed());
+			return Ok(());
+		}
+	} else {
+		ui::debug("Force flag set, skipping cache check");
+	}
+
+	// Load sidecars
+	ui::info(&format!(
+		"Loading embeddings from {}",
+		ui::path_link(dir, 40)
+	));
 
 	let sidecars = index::load_all_sidecars(dir, recursive);
 
@@ -33,45 +78,78 @@ pub fn run(
 
 	ui::success(&format!("Loaded {} embeddings", sidecars.len()));
 
-	// Build hash-to-path lookup using find_file_by_hash
+	// Build hash-to-path lookup
 	let hash_to_path: HashMap<String, PathBuf> = sidecars
 		.iter()
-		.filter_map(|(sidecar_path, sidecar)| {
-			let media_dir = sidecar_path.parent()?.parent()?;
-			let hash = sidecar.hash().to_string();
-			index::find_file_by_hash(media_dir, &hash).map(|path| (hash, path))
-		})
+		.map(|(path, sc)| (sc.hash().to_string(), path.clone()))
 		.collect();
+
+	// Log embedding statistics
+	if let Some((_, first_sidecar)) = sidecars.first() {
+		let emb = first_sidecar.primary_embedding();
+		ui::debug(&format!("Embedding dimension: {}D", emb.0.len()));
+	}
 
 	let params = ClusterParams {
 		min_cluster_size,
 		min_samples,
 	};
 
-	let start = Instant::now();
-	let cluster_db = cluster_embeddings(sidecars, params)?;
+	let cluster_db = cluster_embeddings(sidecars, params, use_umap)?;
+
+	// Log clustering results
+	ui::debug(&format!(
+		"Found {} clusters and {} noise points",
+		cluster_db.clusters.len(),
+		cluster_db.noise.len()
+	));
+	if !cluster_db.clusters.is_empty() {
+		let sizes: Vec<usize> = cluster_db
+			.clusters
+			.iter()
+			.map(|c| c.image_hashes.len())
+			.collect();
+		let avg_size = sizes.iter().sum::<usize>() as f32 / sizes.len() as f32;
+		let max_size = sizes.iter().max().unwrap_or(&0);
+		let min_size = sizes.iter().min().unwrap_or(&0);
+		ui::debug(&format!(
+			"Cluster sizes: min={}, max={}, avg={:.1}",
+			min_size, max_size, avg_size
+		));
+
+		let cohesions: Vec<f32> = cluster_db.clusters.iter().map(|c| c.cohesion).collect();
+		let avg_cohesion = cohesions.iter().sum::<f32>() / cohesions.len() as f32;
+		ui::debug(&format!(
+			"Average cluster cohesion: {:.1}%",
+			avg_cohesion * 100.0
+		));
+	}
+
 	let duration = start.elapsed();
 
-	match output_format {
-		OutputFormat::Human => {
-			print_human_output(&cluster_db, &hash_to_path);
-			println!(
-				"\n{}",
-				format!("Completed in {:.1}s", duration.as_secs_f32()).dimmed()
-			);
-		}
-		OutputFormat::Json => print_json_output(&cluster_db),
-		OutputFormat::Csv => print_csv_output(&cluster_db, &hash_to_path),
-	}
+	// Always save clusters
+	save_clusters(dir, &cluster_db)?;
 
-	if save {
-		save_clusters(dir, &cluster_db)?;
-	}
+	// Print results
+	print_clusters(&cluster_db, &hash_to_path);
+	println!(
+		"\n{}",
+		format!("Completed in {:.1}s", duration.as_secs_f32()).dimmed()
+	);
 
 	Ok(())
 }
 
-fn print_human_output(db: &ClusterDatabase, hash_to_path: &HashMap<String, PathBuf>) {
+fn load_cached_clusters(path: &Path) -> Option<ClusterDatabase> {
+	if !path.exists() {
+		return None;
+	}
+
+	let bytes = fs::read(path).ok()?;
+	rmp_serde::from_slice(&bytes).ok()
+}
+
+fn print_clusters(db: &ClusterDatabase, hash_to_path: &HashMap<String, PathBuf>) {
 	ui::success(&format!(
 		"{} clusters, {} images, {} noise ({:.1}%)",
 		db.clusters.len(),
@@ -118,56 +196,26 @@ fn print_human_output(db: &ClusterDatabase, hash_to_path: &HashMap<String, PathB
 	}
 
 	if !db.noise.is_empty() {
-		println!(
-			"\n{} ({} images)",
-			"Noise".bright_yellow(),
-			db.noise.len()
-		);
+		println!("\n{} ({} images)", "Noise".bright_yellow(), db.noise.len());
 		for hash in db.noise.iter().take(10) {
 			if let Some(path) = hash_to_path.get(hash) {
 				println!("  {}", ui::path_link(path, 60));
 			}
 		}
 		if db.noise.len() > 10 {
-			println!("  {}", format!("... and {} more", db.noise.len() - 10).dimmed());
-		}
-	}
-}
-
-fn print_json_output(db: &ClusterDatabase) {
-	let json = serde_json::to_string_pretty(db).expect("Failed to serialize");
-	println!("{}", json);
-}
-
-fn print_csv_output(db: &ClusterDatabase, hash_to_path: &HashMap<String, PathBuf>) {
-	println!("image_path,cluster_id,is_representative,is_noise");
-
-	for cluster in &db.clusters {
-		for hash in &cluster.image_hashes {
-			if let Some(path) = hash_to_path.get(hash) {
-				let is_repr = hash == &cluster.representative_hash;
-				println!(
-					"{},{},{},false",
-					path.display(),
-					cluster.id,
-					is_repr
-				);
-			}
-		}
-	}
-
-	for hash in &db.noise {
-		if let Some(path) = hash_to_path.get(hash) {
-			println!("{},-1,false,true", path.display());
+			println!(
+				"  {}",
+				format!("... and {} more", db.noise.len() - 10).dimmed()
+			);
 		}
 	}
 }
 
 fn save_clusters(dir: &Path, db: &ClusterDatabase) -> Result<()> {
-	let scout_dir = dir.join(".scout");
+	let scout_dir = dir.join(SIDECAR_DIR);
 	fs::create_dir_all(&scout_dir)?;
 
-	let clusters_path = scout_dir.join("clusters.msgpack");
+	let clusters_path = scout_dir.join(CLUSTERS_FILE);
 	let bytes = rmp_serde::to_vec(db).context("Failed to serialize clusters")?;
 	fs::write(&clusters_path, bytes).context("Failed to write clusters file")?;
 

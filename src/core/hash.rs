@@ -25,10 +25,6 @@ impl FileHash {
 	pub fn as_str(&self) -> &str {
 		&self.0
 	}
-
-	pub fn short(&self) -> &str {
-		&self.0[..8]
-	}
 }
 
 impl std::fmt::Display for FileHash {

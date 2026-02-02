@@ -16,7 +16,6 @@ pub struct Match {
 	pub timestamp: Option<f64>,
 }
 
-
 #[allow(clippy::too_many_arguments)]
 pub fn run(
 	query_text: Option<&str>,
@@ -172,7 +171,11 @@ pub fn run(
 		}
 	}
 
-	matches.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+	matches.sort_by(|a, b| {
+		b.score
+			.partial_cmp(&a.score)
+			.unwrap_or(std::cmp::Ordering::Equal)
+	});
 	matches.truncate(limit);
 
 	if matches.is_empty() {

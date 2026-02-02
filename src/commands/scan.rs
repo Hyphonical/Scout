@@ -144,8 +144,7 @@ pub fn process_video(
 		encoded_frames.push((timestamp, embedding));
 	}
 
-	let sidecar =
-		storage::VideoSidecar::new(file.hash.clone(), encoded_frames);
+	let sidecar = storage::VideoSidecar::new(file.hash.clone(), encoded_frames);
 
 	storage::save_video(&sidecar, media_dir, &file.hash)?;
 	Ok(())

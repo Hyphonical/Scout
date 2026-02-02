@@ -78,17 +78,17 @@ fn main() {
 		cli::Command::Cluster {
 			dir,
 			recursive,
+			force,
 			min_cluster_size,
 			min_samples,
-			output,
-			save,
+			use_umap,
 		} => commands::cluster::run(
 			&dir,
 			recursive,
+			force,
 			min_cluster_size,
 			min_samples,
-			output,
-			save,
+			use_umap,
 		),
 		cli::Command::Clean { dir, recursive } => commands::clean::run(&dir, recursive),
 		cli::Command::Watch {

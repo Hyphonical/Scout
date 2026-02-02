@@ -163,17 +163,16 @@ pub fn extract_frames(path: &Path, count: usize) -> Result<Vec<(f64, RgbImage)>>
 		anyhow::bail!("Frame count must be at least 1");
 	}
 
-	ui::debug(&format!(
-		"Extracting {} frames from: {}",
-		count,
-		path.display()
-	));
-
 	let (duration, width, height, fps) = probe_video(path)?;
 
 	if duration <= 0.0 {
 		anyhow::bail!("Invalid video duration: {:.2}s", duration);
 	}
+
+	ui::debug(&format!(
+		"Video: {:.1}s, {}x{} @ {:.1}fps. Extracting {} frames...",
+		duration, width, height, fps, count
+	));
 
 	// Calculate timestamps for evenly-spaced frames
 	let interval = duration / count as f64;
@@ -191,11 +190,6 @@ pub fn extract_frames(path: &Path, count: usize) -> Result<Vec<(f64, RgbImage)>>
 		.map(|n| format!("eq(n,{})", n))
 		.collect::<Vec<_>>()
 		.join("+");
-
-	ui::debug(&format!(
-		"Video: {:.1}s, {}x{}, {:.1}fps",
-		duration, width, height, fps
-	));
 
 	// Extract frames in one FFmpeg call
 	let mut child = Command::new(get_ffmpeg_binary())
@@ -255,8 +249,6 @@ pub fn extract_frames(path: &Path, count: usize) -> Result<Vec<(f64, RgbImage)>>
 
 		frames.push((timestamps[i], image));
 	}
-
-	ui::debug(&format!("Extracted {} frames", frames.len()));
 
 	Ok(frames)
 }

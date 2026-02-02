@@ -16,9 +16,9 @@ pub fn run(dir: &Path, recursive: bool) -> anyhow::Result<()> {
 		let Ok(sidecar) = storage::load(&sidecar_path) else {
 			continue;
 		};
-		
+
 		let hash = sidecar.hash();
-		
+
 		if storage::find_file_by_hash(&media_dir, hash).is_none() {
 			orphaned.push(sidecar_path);
 		}
