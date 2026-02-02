@@ -94,3 +94,13 @@ pub fn path_link(path: &std::path::Path, max_len: usize) -> String {
 
 	format!("\x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\", uri, display_name)
 }
+
+/// Log a processed file with bright white filename and dimmed time
+pub fn file_processed(path: &std::path::Path, duration_ms: u128) {
+	let link = path_link(path, 60);
+	println!(
+		"  {} {}",
+		link.bright_white(),
+		format!("{}ms", duration_ms).dimmed()
+	);
+}

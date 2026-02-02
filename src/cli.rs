@@ -105,4 +105,22 @@ pub enum Command {
 		#[arg(short, long)]
 		recursive: bool,
 	},
+
+	/// Watch directory for changes and auto-index
+	Watch {
+		#[arg(short, long, default_value = ".")]
+		dir: PathBuf,
+
+		#[arg(short, long)]
+		recursive: bool,
+
+		#[arg(long, help = "Minimum resolution (shortest side in pixels)")]
+		min_resolution: Option<u32>,
+
+		#[arg(long, help = "Maximum file size in MB")]
+		max_size: Option<u64>,
+
+		#[arg(long, help = "Skip video files")]
+		exclude_videos: bool,
+	},
 }

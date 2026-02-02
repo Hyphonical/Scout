@@ -77,6 +77,13 @@ fn main() {
 			exclude_videos,
 		),
 		cli::Command::Clean { dir, recursive } => commands::clean::run(&dir, recursive),
+		cli::Command::Watch {
+			dir,
+			recursive,
+			min_resolution,
+			max_size,
+			exclude_videos,
+		} => commands::watch::run(&dir, recursive, min_resolution, max_size, exclude_videos),
 	};
 
 	if let Err(e) = result {

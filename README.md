@@ -40,21 +40,20 @@ So if you're the kind of person who has 10,000+ photos scattered across folders 
 
 ## Features 🎯
 
-- **Text-based search** 📝: Find images by natural language descriptions
-- **Image-based search** 🖼️: Reverse image search using a reference photo
-- **Hybrid search** 🔀: Combine text + image queries with adjustable weighting
-- **Negative prompts** 🚫: Exclude unwanted content with `--not` flag
-- **Video support** 🎬: Index video files by extracting key frames (requires FFmpeg)
-- **Recursive scanning** 📁: Index entire directory trees in one go
-- **Smart filtering** ⚙️: Exclude videos, set minimum resolution, file size limits
-- **Multiple output formats** 📊: Pretty (default), JSON, or plain text
-- **Custom model paths** 🔧: Specify custom ONNX models via CLI or environment
-- **Multiple backends** 🚀: Auto-detects best hardware (CUDA, TensorRT, CoreML, XNNPACK, or CPU)
-- **Sidecar storage** 💾: Embeddings stored alongside images, no central database
-- **Offline everything** 🔒: No internet required after initial model download
-- **Fast** ⚡: Optimized inference (~50-200ms per image depending on hardware)
-- **Cross platform** 🌐: Works on Linux, macOS, Windows
-- **Portability** 📦: Move/copy images and `.scout/` sidecars travel with them
+- **📝 Text-based search**: Find images by natural language descriptions
+- **🖼️ Image-based search**: Reverse image search using a reference photo
+- **🔀 Hybrid search**: Combine text + image queries with adjustable weighting
+- **🚫 Negative prompts**: Exclude unwanted content with `--not` flag
+- **🎬 Video support**: Index video files by extracting key frames (requires FFmpeg)
+- **📁 Recursive scanning**: Index entire directory trees in one go
+- **⚙️ Smart filtering**: Exclude videos, set minimum resolution, file size limits
+- **🔧 Custom model paths**: Specify custom ONNX models via CLI or environment
+- **🚀 Multiple backends**: Auto-detects best hardware (CUDA, TensorRT, CoreML, XNNPACK, or CPU)
+- **💾 Sidecar storage**: Embeddings stored alongside images, no central database
+- **🔒 Offline everything**: No internet required after initial model download
+- **⚡ Fast**: Optimized inference (~50-200ms per image depending on hardware)
+- **🌐 Cross platform**: Works on Linux, macOS, Windows
+- **📦 Portability**: Move/copy images and `.scout/` sidecars travel with them
 
 ## Quick Start 🚀
 

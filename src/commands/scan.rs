@@ -1,7 +1,6 @@
 //! Scan command - index images and videos
 
 use anyhow::Result;
-use indicatif::{ProgressBar, ProgressStyle};
 use std::path::Path;
 use std::time::Instant;
 
@@ -70,26 +69,15 @@ pub fn run(
 	let mut errors = 0;
 	let mut skipped_videos = 0;
 
-	let total = scan_result.to_process.len();
-	let progress = ProgressBar::new(total as u64);
-	progress.set_style(
-		ProgressStyle::default_bar()
-			.template("{spinner:.blue} [{bar:40.blue/white}] {pos}/{len} {msg}")
-			.unwrap()
-			.progress_chars("━━╸"),
-	);
-
 	for file in scan_result.to_process {
 		let media_dir = file.path.parent().unwrap();
-
-		progress.set_message(file.filename.clone());
+		let file_start = Instant::now();
 
 		let result = match file.media_type {
 			MediaType::Image => process_image(&mut models, &file, media_dir),
 			MediaType::Video => {
 				if !video_supported {
 					skipped_videos += 1;
-					progress.inc(1);
 					continue;
 				}
 				process_video(&mut models, &file, media_dir)
@@ -98,20 +86,16 @@ pub fn run(
 
 		match result {
 			Ok(_) => {
+				let duration_ms = file_start.elapsed().as_millis();
+				ui::log::file_processed(&file.path, duration_ms);
 				processed += 1;
 			}
 			Err(e) => {
-				progress.suspend(|| {
-					ui::error(&format!("{}: {}", file.filename, e));
-				});
+				ui::error(&format!("{}: {}", file.filename, e));
 				errors += 1;
 			}
 		}
-
-		progress.inc(1);
 	}
-
-	progress.finish_and_clear();
 
 	let duration = start.elapsed().as_secs_f32();
 
@@ -135,7 +119,7 @@ pub fn run(
 	Ok(())
 }
 
-fn process_image(
+pub fn process_image(
 	models: &mut Models,
 	file: &processing::scan::MediaFile,
 	media_dir: &Path,
@@ -146,7 +130,7 @@ fn process_image(
 	Ok(())
 }
 
-fn process_video(
+pub fn process_video(
 	models: &mut Models,
 	file: &processing::scan::MediaFile,
 	media_dir: &Path,

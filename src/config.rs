@@ -80,14 +80,14 @@ pub fn models_dir() -> Option<PathBuf> {
 }
 
 pub fn get_vision_model_path() -> Option<PathBuf> {
-	models_dir().map(|d| d.join("siglip2").join(VISION_MODEL))
+	models_dir().map(|d| d.join(VISION_MODEL))
 }
 
 pub fn get_text_model_path() -> Option<PathBuf> {
-	models_dir().map(|d| d.join("siglip2").join(TEXT_MODEL))
+	models_dir().map(|d| d.join(TEXT_MODEL))
 }
 
 pub fn get_tokenizer_path() -> Option<PathBuf> {
-	models_dir().map(|d| d.join("siglip2").join(TOKENIZER))
+	models_dir().map(|d| d.join(TOKENIZER))
 }
 
