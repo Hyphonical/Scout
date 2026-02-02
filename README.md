@@ -118,9 +118,7 @@ Options:
   -r, --recursive               Scan subdirectories
   -f, --force                   Reprocess already-indexed files
   --exclude-videos              Skip video files
-  --min-width <PIXELS>          Minimum image width
-  --min-height <PIXELS>         Minimum image height
-  --min-size <KB>               Minimum file size in KB
+  --min-resolution <PIXELS>     Minimum resolution (shortest side in pixels)
   --max-size <MB>               Maximum file size in MB
 ```
 
@@ -133,7 +131,7 @@ scout scan -d ./photos -r
 scout scan -d ./photos -r --exclude-videos
 
 # With filtering
-scout scan -d ./photos -r --min-width 512 --max-size 50
+scout scan -d ./photos -r --min-resolution 512 --max-size 50
 ```
 
 ### `search` - Find images
@@ -150,7 +148,8 @@ Options:
   -s, --score <FLOAT>           Minimum similarity score [default: 0.0]
   --not <QUERY>                 Negative prompt to exclude content
   --include-ref                 Include reference image in results
-  -f, --format <FORMAT>         Output format: pretty, json, plain
+  -o, --open                    Open first result
+  --exclude-videos              Exclude videos from results
 ```
 
 **Examples:**
@@ -167,6 +166,9 @@ scout search "red car" -i ferrari.jpg -w 0.3
 
 # With negative prompt
 scout search "woman on beach" --not "dog with frisbee"
+
+# Open first result
+scout search "sunset" -o
 ```
 
 ### `clean` - Remove orphaned sidecars
@@ -189,9 +191,7 @@ Options:
   -d, --dir <PATH>              Directory to watch [default: .]
   -r, --recursive               Watch subdirectories
   --exclude-videos              Skip video files
-  --min-width <PIXELS>          Minimum image width
-  --min-height <PIXELS>         Minimum image height
-  --min-size <KB>               Minimum file size in KB
+  --min-resolution <PIXELS>     Minimum resolution (shortest side in pixels)
   --max-size <MB>               Maximum file size in MB
 ```
 
@@ -214,7 +214,7 @@ scout watch
 scout watch -d ~/Pictures -r
 
 # Watch with filters
-scout watch -d ~/Downloads --exclude-videos --min-width 512
+scout watch -d ~/Downloads --exclude-videos --min-resolution 512
 ```
 
 **Rename Immunity:** Scout now identifies files by their content hash (first 64KB), not by filename. This means you can:
