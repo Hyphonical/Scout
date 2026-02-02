@@ -125,7 +125,7 @@ pub fn process_image(
 	media_dir: &Path,
 ) -> Result<()> {
 	let embedding = processing::image::encode(models, &file.path)?;
-	let sidecar = storage::ImageSidecar::new(file.filename.clone(), file.hash.clone(), embedding);
+	let sidecar = storage::ImageSidecar::new(file.hash.clone(), embedding);
 	storage::save_image(&sidecar, media_dir, &file.hash)?;
 	Ok(())
 }
@@ -145,7 +145,7 @@ pub fn process_video(
 	}
 
 	let sidecar =
-		storage::VideoSidecar::new(file.filename.clone(), file.hash.clone(), encoded_frames);
+		storage::VideoSidecar::new(file.hash.clone(), encoded_frames);
 
 	storage::save_video(&sidecar, media_dir, &file.hash)?;
 	Ok(())

@@ -92,6 +92,8 @@ pub fn run(
 			outdated += 1;
 		}
 
+		let hash = sidecar.hash().to_string();
+
 		match sidecar {
 			storage::Sidecar::Image(img) => {
 				let mut score = query_emb.similarity(&img.embedding());
@@ -102,12 +104,13 @@ pub fn run(
 				}
 
 				if score >= min_score {
-					let image_path = media_dir.join(img.filename());
-					matches.push(Match {
-						path: image_path.to_string_lossy().to_string(),
-						score,
-						timestamp: None,
-					});
+					if let Some(image_path) = storage::find_file_by_hash(&media_dir, &hash) {
+						matches.push(Match {
+							path: image_path.to_string_lossy().to_string(),
+							score,
+							timestamp: None,
+						});
+					}
 				}
 			}
 			storage::Sidecar::Video(vid) => {
@@ -134,12 +137,13 @@ pub fn run(
 				}
 
 				if best_score >= min_score {
-					let video_path = media_dir.join(vid.filename());
-					matches.push(Match {
-						path: video_path.to_string_lossy().to_string(),
-						score: best_score,
-						timestamp: Some(best_timestamp),
-					});
+					if let Some(video_path) = storage::find_file_by_hash(&media_dir, &hash) {
+						matches.push(Match {
+							path: video_path.to_string_lossy().to_string(),
+							score: best_score,
+							timestamp: Some(best_timestamp),
+						});
+					}
 				}
 			}
 		}

@@ -13,7 +13,6 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ImageSidecar {
 	version: String,
-	filename: String,
 	hash: String,
 	embedding: Vec<f32>,
 }
@@ -21,7 +20,6 @@ pub struct ImageSidecar {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VideoSidecar {
 	version: String,
-	filename: String,
 	hash: String,
 	frames: Vec<VideoFrame>,
 }
@@ -39,10 +37,9 @@ pub enum Sidecar {
 }
 
 impl ImageSidecar {
-	pub fn new(filename: String, hash: FileHash, embedding: Embedding) -> Self {
+	pub fn new(hash: FileHash, embedding: Embedding) -> Self {
 		Self {
 			version: VERSION.to_string(),
-			filename,
 			hash: hash.as_str().to_string(),
 			embedding: embedding.as_slice().to_vec(),
 		}
@@ -52,8 +49,8 @@ impl ImageSidecar {
 		Embedding::raw(self.embedding.clone())
 	}
 
-	pub fn filename(&self) -> &str {
-		&self.filename
+	pub fn hash(&self) -> &str {
+		&self.hash
 	}
 
 	pub fn is_current_version(&self) -> bool {
@@ -62,10 +59,9 @@ impl ImageSidecar {
 }
 
 impl VideoSidecar {
-	pub fn new(filename: String, hash: FileHash, frames: Vec<(f64, Embedding)>) -> Self {
+	pub fn new(hash: FileHash, frames: Vec<(f64, Embedding)>) -> Self {
 		Self {
 			version: VERSION.to_string(),
-			filename,
 			hash: hash.as_str().to_string(),
 			frames: frames
 				.into_iter()
@@ -84,8 +80,8 @@ impl VideoSidecar {
 			.collect()
 	}
 
-	pub fn filename(&self) -> &str {
-		&self.filename
+	pub fn hash(&self) -> &str {
+		&self.hash
 	}
 
 	pub fn is_current_version(&self) -> bool {
@@ -94,10 +90,10 @@ impl VideoSidecar {
 }
 
 impl Sidecar {
-	pub fn filename(&self) -> &str {
+	pub fn hash(&self) -> &str {
 		match self {
-			Sidecar::Image(img) => img.filename(),
-			Sidecar::Video(vid) => vid.filename(),
+			Sidecar::Image(img) => img.hash(),
+			Sidecar::Video(vid) => vid.hash(),
 		}
 	}
 

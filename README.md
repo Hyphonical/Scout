@@ -14,6 +14,7 @@ Find images by what's _in_ them, not what you named the file. No cloud, no API k
 - [Usage](#usage)
   - [`scan` - Index Images](#scan---index-images)
   - [`search` - Find Images](#search---find-images)
+  - [`watch` - Auto-Index New Files](#watch---auto-index-new-files)
   - [`clean` - Remove Orphaned Sidecars](#clean---remove-orphaned-sidecars)
   - [Global Options](#global-options)
 - [Hardware Support](#hardware-support-)
@@ -54,6 +55,8 @@ So if you're the kind of person who has 10,000+ photos scattered across folders 
 - **⚡ Fast**: Optimized inference (~50-200ms per image depending on hardware)
 - **🌐 Cross platform**: Works on Linux, macOS, Windows
 - **📦 Portability**: Move/copy images and `.scout/` sidecars travel with them
+- **👁️ Watch mode**: Monitor directories and auto-index new files as they arrive
+- **🏷️ Rename immunity**: Files identified by content hash, not filename - rename freely!
 
 ## Quick Start 🚀
 
@@ -173,6 +176,49 @@ Options:
 ```
 
 Deletes `.scout/` sidecar files for images that no longer exist.
+`watch` - Auto-index new files
+
+```bash
+scout watch [OPTIONS]
+
+Options:
+  -d, --dir <PATH>              Directory to watch [default: .]
+  -r, --recursive               Watch subdirectories
+  --exclude-videos              Skip video files
+  --min-width <PIXELS>          Minimum image width
+  --min-height <PIXELS>         Minimum image height
+  --min-size <KB>               Minimum file size in KB
+  --max-size <MB>               Maximum file size in MB
+```
+
+Monitors a directory for new or modified media files and automatically indexes them in real-time. Perfect for download folders, camera uploads, or ongoing projects.
+
+**How it works:**
+- Watches for file system changes (new files, copies, moves)
+- Automatically processes qualifying media files
+- Hash-based deduplication - files already indexed are skipped
+- Queued processing to avoid CPU spikes
+- Runs continuously until stopped with `Ctrl+C`
+
+**Examples:**
+
+```bash
+# Watch current directory
+scout watch
+
+# Watch with recursive monitoring
+scout watch -d ~/Pictures -r
+
+# Watch with filters
+scout watch -d ~/Downloads --exclude-videos --min-width 512
+```
+
+**Rename Immunity:** Scout now identifies files by their content hash (first 64KB), not by filename. This means you can:
+- Rename files freely without losing their index
+- Move files between folders (with their `.scout/` sidecars)
+- Reorganize your library without re-scanning
+- Search will always find the current filename via hash lookup
+
 
 ### Global options
 

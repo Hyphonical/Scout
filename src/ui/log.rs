@@ -98,9 +98,9 @@ pub fn path_link(path: &std::path::Path, max_len: usize) -> String {
 /// Log a processed file with bright white filename and dimmed time
 pub fn file_processed(path: &std::path::Path, duration_ms: u128) {
 	let link = path_link(path, 60);
-	println!(
-		"  {} {}",
+	info(&format!(
+		"{} {}",
 		link.bright_white(),
 		format!("{}ms", duration_ms).dimmed()
-	);
+	));
 }

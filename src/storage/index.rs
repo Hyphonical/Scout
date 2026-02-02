@@ -4,7 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::config::SIDECAR_DIR;
-use crate::core::FileHash;
+use crate::core::{FileHash, MediaType};
 
 /// Find sidecar for a specific hash
 pub fn find(media_dir: &Path, hash: &FileHash) -> Option<PathBuf> {
@@ -59,4 +59,29 @@ fn scan_sidecar_dir(scout_dir: &Path, media_dir: &Path, results: &mut Vec<(PathB
 			results.push((path, media_dir.to_path_buf()));
 		}
 	}
+}
+
+/// Find the actual file by hash in the given directory
+pub fn find_file_by_hash(media_dir: &Path, hash: &str) -> Option<PathBuf> {
+	let Ok(entries) = fs::read_dir(media_dir) else {
+		return None;
+	};
+
+	for entry in entries.filter_map(|e| e.ok()) {
+		let path = entry.path();
+		
+		// Skip directories and non-media files
+		if path.is_dir() || MediaType::detect(&path).is_none() {
+			continue;
+		}
+
+		// Compute hash and compare
+		if let Ok(file_hash) = FileHash::compute(&path) {
+			if file_hash.as_str() == hash {
+				return Some(path);
+			}
+		}
+	}
+
+	None
 }
