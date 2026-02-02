@@ -6,6 +6,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 static VERBOSE: AtomicBool = AtomicBool::new(false);
 
+const LOGO: &str = r#"
+   _____                  __ 
+  / ___/_________  __  __/ /_
+  \__ \/ ___/ __ \/ / / / __/
+ ___/ / /__/ /_/ / /_/ / /_  
+/____/\___/\____/\____/\__/  "#;
+
 const SLOGANS: &[&str] = &[
 	"Semantic search but cooler",
 	"Where embeddings meet aesthetics",
@@ -25,6 +32,11 @@ const SLOGANS: &[&str] = &[
 pub fn random_slogan() -> &'static str {
 	let idx = rand::rng().random_range(0..SLOGANS.len());
 	SLOGANS[idx]
+}
+
+pub fn print_logo() {
+	println!("{}", LOGO.bright_blue().bold());
+	println!("{}", random_slogan().dimmed().italic());
 }
 
 pub struct Log;

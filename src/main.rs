@@ -9,13 +9,12 @@ mod storage;
 mod ui;
 
 use clap::Parser;
-use colored::*;
 
 fn main() {
 	let cli = cli::Cli::parse();
 
-	// Show slogan
-	println!("{}", ui::log::random_slogan().bright_white().italic());
+	// Show logo with slogan
+	ui::log::print_logo();
 	println!();
 
 	ui::Log::set_verbose(cli.verbose);

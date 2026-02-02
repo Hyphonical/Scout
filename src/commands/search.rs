@@ -140,7 +140,7 @@ pub fn run(
 					if let Some(video_path) = storage::find_file_by_hash(&media_dir, &hash) {
 						matches.push(Match {
 							path: video_path.to_string_lossy().to_string(),
-							score: best_score,
+							score: best_score, // Clamp back to 0.0 for display
 							timestamp: Some(best_timestamp),
 						});
 					}

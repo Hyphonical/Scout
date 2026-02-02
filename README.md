@@ -58,6 +58,10 @@ So if you're the kind of person who has 10,000+ photos scattered across folders 
 - **👁️ Watch mode**: Monitor directories and auto-index new files as they arrive
 - **🏷️ Rename immunity**: Files identified by content hash, not filename - rename freely!
 
+## Demo
+
+<img src="assets/scan.gif" width="600" alt="Scout scanning demo">
+
 ## Quick Start 🚀
 
 ### 1. Install
@@ -268,7 +272,7 @@ PRs welcome! See [docs/contributing.md](docs/contributing.md) for developer guid
 
 ## License
 
-MIT - do whatever you want with it.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
 ---
 
