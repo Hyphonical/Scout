@@ -185,7 +185,7 @@ pub fn run(
 	for (i, m) in matches.iter().enumerate() {
 		let path = Path::new(&m.path);
 
-		let link = ui::log::path_link(path, 50);
+		let link = ui::log::path_link(path, 60);
 		let percentage = (m.score * 100.0).round() as u32;
 
 		let location_str = if let Some(ts) = m.timestamp {
