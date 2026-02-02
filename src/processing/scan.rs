@@ -21,7 +21,7 @@ fn load_scoutignore(dir: &Path) -> Vec<String> {
 
 	BufReader::new(file)
 		.lines()
-		.filter_map(|line| line.ok())
+		.map_while(Result::ok)
 		.filter(|line| !line.trim().is_empty() && !line.starts_with('#'))
 		.collect()
 }
@@ -65,7 +65,6 @@ pub fn scan_directory(
 
 	scan_recursive(
 		root,
-		root,
 		recursive,
 		force,
 		min_resolution,
@@ -85,9 +84,9 @@ pub fn scan_directory(
 	}
 }
 
+#[allow(clippy::too_many_arguments)]
 fn scan_recursive(
 	current: &Path,
-	root: &Path,
 	recursive: bool,
 	force: bool,
 	min_resolution: Option<u32>,
@@ -122,7 +121,6 @@ fn scan_recursive(
 			if recursive {
 				scan_recursive(
 					&path,
-					root,
 					recursive,
 					force,
 					min_resolution,

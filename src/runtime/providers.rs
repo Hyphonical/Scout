@@ -3,23 +3,21 @@
 use anyhow::{Context, Result};
 use ort::session::{builder::GraphOptimizationLevel, Session};
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 
 use crate::ui;
 
 pub use crate::cli::Provider;
 
-static mut SELECTED_PROVIDER: Provider = Provider::Auto;
+static SELECTED_PROVIDER: OnceLock<Provider> = OnceLock::new();
 static PROVIDER_LOGGED: Mutex<bool> = Mutex::new(false);
 
 pub fn set_provider(p: Provider) {
-	unsafe {
-		SELECTED_PROVIDER = p;
-	}
+	let _ = SELECTED_PROVIDER.set(p);
 }
 
 fn get_provider() -> Provider {
-	unsafe { SELECTED_PROVIDER }
+	*SELECTED_PROVIDER.get().unwrap_or(&Provider::Auto)
 }
 
 pub fn create_session(model_path: &Path) -> Result<Session> {

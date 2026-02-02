@@ -25,12 +25,29 @@ impl TextModel {
 	}
 
 	pub fn encode(&mut self, text: &str) -> Result<Embedding> {
+		// Validate input
+		let trimmed = text.trim();
+		if trimmed.is_empty() {
+			anyhow::bail!("Query cannot be empty");
+		}
+
 		let encoding = self
 			.tokenizer
-			.encode(text, true)
+			.encode(trimmed, true)
 			.map_err(|e| anyhow::anyhow!("Tokenization failed: {}", e))?;
 
-		let input_ids: Vec<i64> = encoding.get_ids().iter().map(|&x| x as i64).collect();
+		let mut input_ids: Vec<i64> = encoding.get_ids().iter().map(|&x| x as i64).collect();
+
+		// Warn if query is too long and will be truncated
+		if input_ids.len() > crate::config::MAX_QUERY_TOKENS {
+			crate::ui::warn(&format!(
+				"Query too long ({} tokens, max {}). Truncating - results may be less accurate.",
+				input_ids.len(),
+				crate::config::MAX_QUERY_TOKENS
+			));
+			input_ids.truncate(crate::config::MAX_QUERY_TOKENS);
+		}
+
 		let shape = vec![1, input_ids.len()];
 		let input = ort::value::Value::from_array((shape, input_ids))?;
 

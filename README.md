@@ -14,7 +14,6 @@ Find images by what's _in_ them, not what you named the file. No cloud, no API k
 - [Usage](#usage)
   - [`scan` - Index Images](#scan---index-images)
   - [`search` - Find Images](#search---find-images)
-  - [`repl` - Interactive Search](#repl---interactive-search)
   - [`clean` - Remove Orphaned Sidecars](#clean---remove-orphaned-sidecars)
   - [Global Options](#global-options)
 - [Hardware Support](#hardware-support-)
@@ -45,7 +44,6 @@ So if you're the kind of person who has 10,000+ photos scattered across folders 
 - **Image-based search** 🖼️: Reverse image search using a reference photo
 - **Hybrid search** 🔀: Combine text + image queries with adjustable weighting
 - **Negative prompts** 🚫: Exclude unwanted content with `--not` flag
-- **REPL mode** 💬: Interactive search sessions without model reload overhead
 - **Video support** 🎬: Index video files by extracting key frames (requires FFmpeg)
 - **Recursive scanning** 📁: Index entire directory trees in one go
 - **Smart filtering** ⚙️: Exclude videos, set minimum resolution, file size limits
@@ -90,9 +88,6 @@ scout search "cat sleeping on keyboard" -d ~/Photos
 
 # Image search
 scout search -i reference.jpg -d ~/Photos
-
-# Interactive mode
-scout repl -d ~/Photos -r
 ```
 
 ## Documentation 📚
@@ -168,45 +163,6 @@ scout search "red car" -i ferrari.jpg -w 0.3
 scout search "woman on beach" --not "dog with frisbee"
 ```
 
-### `repl` - Interactive search
-
-```bash
-scout repl [OPTIONS]
-
-Options:
-  -d, --dir <PATH>              Directory to search [default: .]
-  -r, --recursive               Search subdirectories
-  -n, --limit <N>               Max results per search [default: 10]
-  -s, --score <FLOAT>           Minimum similarity score [default: 0.0]
-  --exclude-videos              Skip video files
-```
-
-**Interactive mode:** Models load once, index cached, fast repeated searches.
-
-**Commands:**
-- Type any text to search
-- `help` - Show commands
-- `exit`, `quit`, `q` - Exit REPL
-
-**Example session:**
-```bash
-$ scout repl -d ~/Photos -r
-
-Scout REPL Mode
-Models and index loaded. Type queries or 'help' for commands.
-
-> sunset over mountains
-1. IMG_4523.jpg (0.234)
-2. vacation_2023.jpg (0.198)
-...
-
-> beach at sunset
-1. sunset_beach.jpg (0.287)
-...
-
-> exit
-```
-
 ### `clean` - Remove orphaned sidecars
 
 ```bash
@@ -236,9 +192,6 @@ scout search "cat" --model-dir ./my_models
 
 # Force CPU execution
 scout scan -d ./photos --provider cpu --verbose
-
-# Custom FFmpeg path
-scout scan -d ~/Videos -r --ffmpeg-path /opt/ffmpeg/bin/ffmpeg
 ```
 
 ## Hardware Support ⚡

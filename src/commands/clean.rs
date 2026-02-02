@@ -16,9 +16,9 @@ pub fn run(dir: &Path, recursive: bool) -> anyhow::Result<()> {
 		let Ok(sidecar) = storage::load(&sidecar_path) else {
 			continue;
 		};
-		let image_path = media_dir.join(sidecar.filename());
+		let media_path = media_dir.join(sidecar.filename());
 
-		if !image_path.exists() {
+		if !media_path.exists() {
 			orphaned.push(sidecar_path);
 		}
 	}

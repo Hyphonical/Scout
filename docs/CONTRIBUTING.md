@@ -79,7 +79,6 @@ src/
     scan.rs       # scan command
     search.rs     # search command
     clean.rs      # clean command
-    repl.rs       # repl command
   
   ui/             # User interface
     log.rs        # Logging and output formatting

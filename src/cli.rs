@@ -105,22 +105,4 @@ pub enum Command {
 		#[arg(short, long)]
 		recursive: bool,
 	},
-
-	/// Interactive search mode
-	Repl {
-		#[arg(short, long, default_value = ".")]
-		dir: PathBuf,
-
-		#[arg(short, long)]
-		recursive: bool,
-
-		#[arg(short = 'n', long, default_value_t = crate::config::DEFAULT_LIMIT)]
-		limit: usize,
-
-		#[arg(short, long, default_value_t = crate::config::DEFAULT_MIN_SCORE)]
-		score: f32,
-
-		#[arg(long, help = "Exclude videos from results")]
-		exclude_videos: bool,
-	},
 }

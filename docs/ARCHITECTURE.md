@@ -19,7 +19,7 @@ Technical overview of Scout's internals.
 Scout is a semantic search engine for images and videos. It works in two phases:
 
 1. **Indexing (scan):** Generate embeddings for media files and store in sidecars
-2. **Searching (search/repl):** Encode query and compare against stored embeddings
+2. **Searching (search):** Encode query and compare against stored embeddings
 
 ### Technology Stack
 
@@ -41,13 +41,13 @@ Scout is a semantic search engine for images and videos. It works in two phases:
     ┌──────────────┼──────────────┐
     │              │              │
     v              v              v
-┌─────────┐  ┌─────────┐  ┌──────────┐  ┌─────────┐
-│  scan   │  │ search  │  │  repl    │  │ clean   │
-└────┬────┘  └────┬────┘  └─────┬────┘  └─────┬───┘
-     │            │             │             │
-     │  ┌─────────┴─────────────┘             │
-     │  │                                     │
-     v  v                                     v
+┌─────────┐  ┌─────────┐  ┌─────────┐
+│  scan   │  │ search  │  │ clean   │
+└────┬────┘  └────┬────┘  └─────┬───┘
+     │            │             │
+     │  ┌─────────┘             │
+     │  │                       │
+     v  v                       v
 ┌──────────────────┐                   ┌──────────┐
 │   Processing     │                   │ Storage  │
 │  - scan.rs       │                   │  Index   │
@@ -81,7 +81,7 @@ Scout is a semantic search engine for images and videos. It works in two phases:
 
 **Key types:**
 - `Cli` - Top-level struct with global options
-- `Command` - Enum of subcommands (Scan, Search, Repl, Clean)
+- `Command` - Enum of subcommands (Scan, Search, Clean)
 - `Provider` - Execution provider enum
 
 **Responsibilities:**
@@ -427,25 +427,6 @@ pub fn set_ffmpeg_path(path: PathBuf)
 8. Truncate to limit
 9. Display results with timestamps (for videos)
 
-#### `repl.rs`
-
-**Purpose:** Interactive search mode
-
-**Flow:**
-1. Load models once
-2. Pre-scan sidecars
-3. Enter REPL loop:
-   - Read query
-   - Encode and search
-   - Display results
-   - Repeat
-4. Exit on "exit"/"quit"/"q"
-
-**Optimization:**
-- Models loaded once
-- Index cached in memory
-- No startup overhead per query
-
 #### `clean.rs`
 
 **Purpose:** Remove orphaned sidecars
@@ -544,30 +525,6 @@ For each sidecar:
             │
             v
         Display results
-```
-
-### REPL Flow
-
-```
-Initialize
-    │
-    ├─> Load models (once)
-    │
-    └─> Scan sidecars (once)
-        │
-        v
-    ┌─> Read query
-    │   │
-    │   v
-    │   encode_text()
-    │   │
-    │   v
-    │   Search cached sidecars
-    │   │
-    │   v
-    │   Display results
-    │   │
-    └───┘ (loop)
 ```
 
 ---
@@ -673,7 +630,6 @@ Priority order:
 
 - Models stay loaded for duration of command
 - Dropped when command exits
-- REPL mode keeps models loaded (efficiency)
 
 ---
 
@@ -826,7 +782,6 @@ If requested provider unavailable:
 **Search:**
 - Pre-computed embeddings (no re-encoding)
 - Fast similarity (dot product)
-- REPL caches models and index
 
 **Storage:**
 - MessagePack (compact, fast)

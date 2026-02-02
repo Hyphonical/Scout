@@ -18,29 +18,33 @@ pub fn set_ffmpeg_path(path: PathBuf) {
 	let _ = CUSTOM_FFMPEG.set(path);
 }
 
-fn get_ffmpeg_binary() -> String {
+fn get_ffmpeg_tool_binary(tool_name: &str) -> String {
 	if let Some(custom) = CUSTOM_FFMPEG.get() {
-		return custom.to_string_lossy().to_string();
-	}
-	"ffmpeg".to_string()
-}
-
-fn get_ffprobe_binary() -> String {
-	if let Some(custom) = CUSTOM_FFMPEG.get() {
-		// If custom ffmpeg path is set, look for ffprobe in same directory
+		if tool_name == "ffmpeg" {
+			return custom.to_string_lossy().to_string();
+		}
+		// For other tools (ffprobe), look in same directory as custom ffmpeg
 		if let Some(parent) = custom.parent() {
-			let ffprobe_path = parent.join("ffprobe");
-			if ffprobe_path.exists() {
-				return ffprobe_path.to_string_lossy().to_string();
+			let tool_path = parent.join(tool_name);
+			if tool_path.exists() {
+				return tool_path.to_string_lossy().to_string();
 			}
 			// Try with .exe extension on Windows
-			let ffprobe_exe = parent.join("ffprobe.exe");
-			if ffprobe_exe.exists() {
-				return ffprobe_exe.to_string_lossy().to_string();
+			let tool_exe = parent.join(format!("{}.exe", tool_name));
+			if tool_exe.exists() {
+				return tool_exe.to_string_lossy().to_string();
 			}
 		}
 	}
-	"ffprobe".to_string()
+	tool_name.to_string()
+}
+
+fn get_ffmpeg_binary() -> String {
+	get_ffmpeg_tool_binary("ffmpeg")
+}
+
+fn get_ffprobe_binary() -> String {
+	get_ffmpeg_tool_binary("ffprobe")
 }
 
 /// Check if FFmpeg is available in PATH

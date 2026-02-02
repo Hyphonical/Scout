@@ -14,7 +14,8 @@ pub const TOKENIZER: &str = "tokenizer.json";
 
 // === Model Parameters ===
 pub const INPUT_SIZE: u32 = 512;
-pub const EMBEDDING_DIM: usize = 1024;
+pub const EMBEDDING_DIM: usize = 1024; // SigLIP2
+pub const MAX_QUERY_TOKENS: usize = 64; // SigLIP2 text encoder max sequence length
 
 // === Storage ===
 pub const SIDECAR_DIR: &str = ".scout";
@@ -79,13 +80,14 @@ pub fn models_dir() -> Option<PathBuf> {
 }
 
 pub fn get_vision_model_path() -> Option<PathBuf> {
-	models_dir().map(|d| d.join(VISION_MODEL))
+	models_dir().map(|d| d.join("siglip2").join(VISION_MODEL))
 }
 
 pub fn get_text_model_path() -> Option<PathBuf> {
-	models_dir().map(|d| d.join(TEXT_MODEL))
+	models_dir().map(|d| d.join("siglip2").join(TEXT_MODEL))
 }
 
 pub fn get_tokenizer_path() -> Option<PathBuf> {
-	models_dir().map(|d| d.join(TOKENIZER))
+	models_dir().map(|d| d.join("siglip2").join(TOKENIZER))
 }
+

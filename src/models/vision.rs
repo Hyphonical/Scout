@@ -37,7 +37,7 @@ fn preprocess(img: &image::DynamicImage) -> Result<(Vec<usize>, Vec<f32>)> {
 	let size = INPUT_SIZE as usize;
 
 	let shape = vec![1, 3, size, size];
-	let mut data = vec![0.0f32; 1 * 3 * size * size];
+	let mut data = vec![0.0f32; 3 * size * size];
 
 	for y in 0..size {
 		for x in 0..size {

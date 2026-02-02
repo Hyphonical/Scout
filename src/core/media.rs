@@ -10,16 +10,18 @@ pub enum MediaType {
 }
 
 impl MediaType {
-	/// Detect media type from file extension
+	/// Detect media type from file
 	pub fn detect(path: &Path) -> Option<Self> {
-		let ext = path.extension()?.to_str()?;
-
-		if IMAGE_EXTENSIONS.iter().any(|e| e.eq_ignore_ascii_case(ext)) {
-			Some(MediaType::Image)
-		} else if VIDEO_EXTENSIONS.iter().any(|e| e.eq_ignore_ascii_case(ext)) {
-			Some(MediaType::Video)
-		} else {
-			None
+		// Quick extension check first
+		if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+			if IMAGE_EXTENSIONS.iter().any(|e| e.eq_ignore_ascii_case(ext)) {
+				return Some(MediaType::Image);
+			}
+			if VIDEO_EXTENSIONS.iter().any(|e| e.eq_ignore_ascii_case(ext)) {
+				return Some(MediaType::Video);
+			}
 		}
+
+		None
 	}
 }

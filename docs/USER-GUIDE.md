@@ -106,57 +106,6 @@ scout search "cat" -n 5 -s 0.3
 scout search "mountain landscape" -o
 ```
 
-### `repl` - Interactive Mode
-
-Start an interactive search session.
-
-```bash
-scout repl [OPTIONS]
-```
-
-**Options:**
-- `-d, --dir <DIR>` - Search directory
-- `-r, --recursive` - Include subdirectories
-- `-n, --limit <NUM>` - Max results per query
-- `-s, --score <0.0-1.0>` - Minimum score
-- `--exclude-videos` - No videos
-
-**Example session:**
-
-```bash
-$ scout repl -d ~/Photos
-
-ℹ Starting interactive search mode
-ℹ Type your queries, or 'exit' to quit
-
-✓ Loaded 1,247 indexed files
-
-scout> beautiful sunset
- 1. vacation_2024/IMG_5432.jpg 89% 🔥
- 2. landscapes/golden_hour.png 82% 🔥
- 3. beach_trip/sunset_1.jpg 76%
-✓ Found 3 matches in 18ms
-
-scout> dog playing
- 1. pets/charlie_park.jpg 91% 🔥
- 2. family/backyard_fun.png 73%
-✓ Found 2 matches in 15ms
-
-scout> help
-REPL Commands:
-  <text>  Enter a search query
-  help    Show this help message
-  exit    Exit REPL mode
-
-scout> exit
-ℹ Goodbye!
-```
-
-**Why use REPL:**
-- **Faster** - Models loaded once, index cached
-- **Interactive** - Refine queries without retyping options
-- **Efficient** - No startup overhead per search
-
 ### `clean` - Remove Orphaned Sidecars
 
 Remove `.scout` sidecars for deleted/moved files.
@@ -465,12 +414,6 @@ scout search "mountain landscape with lake"
 scout search "mountain landscape with lake sunset"
 ```
 
-**Use REPL for exploration:**
-```bash
-scout repl -d photos/
-# Try different queries quickly
-```
-
 ### Storage Management
 
 **Sidecar size:**
@@ -498,9 +441,8 @@ scout clean -r
 ### Performance Tips
 
 1. **Use GPU** for large collections (1000+ files)
-2. **Use REPL** for multiple searches
-3. **Filter during scan** to reduce index size
-4. **Exclude videos** if not needed (faster scans)
+2. **Filter during scan** to reduce index size
+3. **Exclude videos** if not needed (faster scans)
 
 ### Troubleshooting
 
@@ -511,7 +453,6 @@ scout clean -r
 
 **Slow search:**
 - Use GPU: `--provider cuda`
-- Use REPL mode (cache models)
 - Reduce search scope: `-d specific/folder`
 
 **"Vision model not found":**

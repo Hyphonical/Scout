@@ -16,6 +16,8 @@ pub struct Match {
 	pub timestamp: Option<f64>,
 }
 
+
+#[allow(clippy::too_many_arguments)]
 pub fn run(
 	query_text: Option<&str>,
 	query_image: Option<&Path>,
@@ -45,11 +47,13 @@ pub fn run(
 			models.encode_image(&img)?
 		}
 		(Some(text), Some(img_path)) => {
+			let filename = img_path
+				.file_name()
+				.and_then(|n| n.to_str())
+				.unwrap_or("image");
 			ui::info(&format!(
 				"Combined search: \"{}\" + {} (weight: {:.2})",
-				text,
-				img_path.file_name().unwrap().to_string_lossy(),
-				weight
+				text, filename, weight
 			));
 			let text_emb = models.encode_text(text)?;
 			let img = image::open(img_path)?;
@@ -94,7 +98,7 @@ pub fn run(
 
 				if let Some(ref neg_emb) = negative_emb {
 					let neg_score = neg_emb.similarity(&img.embedding());
-					score = score - (neg_score * NEGATIVE_WEIGHT);
+					score -= neg_score * NEGATIVE_WEIGHT;
 				}
 
 				if score >= min_score {
@@ -120,7 +124,7 @@ pub fn run(
 
 					if let Some(ref neg_emb) = negative_emb {
 						let neg_score = neg_emb.similarity(&frame_emb);
-						score = score - (neg_score * NEGATIVE_WEIGHT);
+						score -= neg_score * NEGATIVE_WEIGHT;
 					}
 
 					if score > best_score {
@@ -164,7 +168,7 @@ pub fn run(
 		}
 	}
 
-	matches.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
+	matches.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
 	matches.truncate(limit);
 
 	if matches.is_empty() {
@@ -180,7 +184,7 @@ pub fn run(
 		let link = ui::log::path_link(path, 50);
 		let percentage = (m.score * 100.0).round() as u32;
 
-		let timestamp_str = if let Some(ts) = m.timestamp {
+		let location_str = if let Some(ts) = m.timestamp {
 			format!(
 				" @ {}",
 				crate::processing::video::format_timestamp(ts).bright_yellow()
@@ -193,7 +197,7 @@ pub fn run(
 			"{}. {}{} {} {}",
 			format!("{:2}", i + 1).bright_blue().bold(),
 			link.bright_white(),
-			timestamp_str.dimmed(),
+			location_str.dimmed(),
 			format!("{}%", percentage).dimmed(),
 			if m.score > 0.8 { "🔥" } else { "" }
 		);

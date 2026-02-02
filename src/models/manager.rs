@@ -16,9 +16,25 @@ pub struct Models {
 
 impl Models {
 	pub fn new() -> Result<Self> {
-		let vision_path = config::get_vision_model_path().context("Vision model not found")?;
-		let text_path = config::get_text_model_path().context("Text model not found")?;
-		let tokenizer_path = config::get_tokenizer_path().context("Tokenizer not found")?;
+		let vision_path = config::get_vision_model_path().context(
+			format!("Vision model not found. Ensure {} exists", config::VISION_MODEL_PATH),
+		)?;
+		let text_path = config::get_text_model_path().context(
+			format!("Text model not found. Ensure {} exists", config::TEXT_MODEL_PATH),
+		)?;
+		let tokenizer_path = config::get_tokenizer_path()
+			.context(format!("Tokenizer not found. Ensure {} exists", config::TOKENIZER_PATH))?;
+
+		// Verify files actually exist
+		if !vision_path.exists() {
+			anyhow::bail!("Vision model file does not exist: {}", vision_path.display());
+		}
+		if !text_path.exists() {
+			anyhow::bail!("Text model file does not exist: {}", text_path.display());
+		}
+		if !tokenizer_path.exists() {
+			anyhow::bail!("Tokenizer file does not exist: {}", tokenizer_path.display());
+		}
 
 		Ok(Self {
 			vision: None,

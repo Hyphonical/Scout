@@ -77,13 +77,6 @@ fn main() {
 			exclude_videos,
 		),
 		cli::Command::Clean { dir, recursive } => commands::clean::run(&dir, recursive),
-		cli::Command::Repl {
-			dir,
-			recursive,
-			limit,
-			score,
-			exclude_videos,
-		} => commands::repl::run(&dir, recursive, limit, score, exclude_videos),
 	};
 
 	if let Err(e) = result {
