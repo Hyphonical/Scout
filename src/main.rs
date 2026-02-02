@@ -75,6 +75,21 @@ fn main() {
 			include_ref,
 			exclude_videos,
 		),
+		cli::Command::Cluster {
+			dir,
+			recursive,
+			min_cluster_size,
+			min_samples,
+			output,
+			save,
+		} => commands::cluster::run(
+			&dir,
+			recursive,
+			min_cluster_size,
+			min_samples,
+			output,
+			save,
+		),
 		cli::Command::Clean { dir, recursive } => commands::clean::run(&dir, recursive),
 		cli::Command::Watch {
 			dir,

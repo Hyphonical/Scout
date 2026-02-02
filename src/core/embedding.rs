@@ -1,7 +1,7 @@
 //! Normalized embedding vectors for semantic similarity
 
 #[derive(Debug, Clone)]
-pub struct Embedding(Vec<f32>);
+pub struct Embedding(pub Vec<f32>);
 
 impl Embedding {
 	/// Create normalized embedding from raw data
@@ -22,6 +22,17 @@ impl Embedding {
 	/// Cosine similarity [0.0, 1.0]
 	pub fn similarity(&self, other: &Self) -> f32 {
 		self.0.iter().zip(other.0.iter()).map(|(a, b)| a * b).sum()
+	}
+
+	/// Cosine distance for clustering algorithms [0.0, 2.0]
+	#[allow(dead_code)]
+	pub fn distance(&self, other: &Self) -> f32 {
+		1.0 - self.similarity(other)
+	}
+
+	/// Re-normalize this embedding (returns new instance)
+	pub fn normalize(&self) -> Self {
+		Self(normalize(&self.0))
 	}
 
 	/// Weighted combination of two embeddings

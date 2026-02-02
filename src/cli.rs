@@ -14,6 +14,13 @@ pub enum Provider {
 	Xnnpack,
 }
 
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum OutputFormat {
+	Human,
+	Json,
+	Csv,
+}
+
 #[derive(Parser)]
 #[command(name = "scout", version, about = "AI-powered semantic image search")]
 pub struct Cli {
@@ -95,6 +102,27 @@ pub enum Command {
 
 		#[arg(long, help = "Exclude videos from results")]
 		exclude_videos: bool,
+	},
+
+	/// Cluster images by visual similarity
+	Cluster {
+		#[arg(short, long, default_value = ".")]
+		dir: PathBuf,
+
+		#[arg(short, long)]
+		recursive: bool,
+
+		#[arg(long, default_value_t = 5, help = "Minimum images per cluster")]
+		min_cluster_size: usize,
+
+		#[arg(long, help = "Minimum samples for core points")]
+		min_samples: Option<usize>,
+
+		#[arg(short, long, value_enum, default_value = "human")]
+		output: OutputFormat,
+
+		#[arg(long, help = "Save clusters to .scout/clusters.msgpack")]
+		save: bool,
 	},
 
 	/// Remove orphaned sidecars

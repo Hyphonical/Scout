@@ -103,6 +103,20 @@ impl Sidecar {
 			Sidecar::Video(vid) => vid.is_current_version(),
 		}
 	}
+
+	/// Get primary embedding for clustering (first frame for videos)
+	pub fn primary_embedding(&self) -> Embedding {
+		match self {
+			Sidecar::Image(img) => img.embedding(),
+			Sidecar::Video(vid) => {
+				// Use first frame embedding for videos
+				vid.frames
+					.first()
+					.map(|f| Embedding::raw(f.embedding.clone()))
+					.unwrap_or_else(|| Embedding::raw(vec![0.0; 1024]))
+			}
+		}
+	}
 }
 
 /// Save image sidecar

@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 
 use crate::config::SIDECAR_DIR;
 use crate::core::{FileHash, MediaType};
+use crate::storage::Sidecar;
 
 /// Find sidecar for a specific hash
 pub fn find(media_dir: &Path, hash: &FileHash) -> Option<PathBuf> {
@@ -21,6 +22,20 @@ pub fn scan(root: &Path, recursive: bool) -> Vec<(PathBuf, PathBuf)> {
 	let mut results = Vec::new();
 	scan_recursive(root, root, recursive, &mut results);
 	results
+}
+
+/// Load all sidecars from a directory (for clustering)
+pub fn load_all_sidecars(dir: &Path, recursive: bool) -> Vec<(PathBuf, Sidecar)> {
+	let sidecar_paths = scan(dir, recursive);
+	let mut sidecars = Vec::with_capacity(sidecar_paths.len());
+
+	for (sidecar_path, _media_dir) in sidecar_paths {
+		if let Ok(sidecar) = super::sidecar::load(&sidecar_path) {
+			sidecars.push((sidecar_path, sidecar));
+		}
+	}
+
+	sidecars
 }
 
 fn scan_recursive(
