@@ -26,11 +26,16 @@ pub fn scan(root: &Path, recursive: bool) -> Vec<(PathBuf, PathBuf)> {
 	results
 }
 
-pub fn load_all_sidecars(dir: &Path, recursive: bool) -> Vec<(PathBuf, Sidecar)> {
+/// Load all sidecars and return them with hash cache
+/// Returns (Vec<(media_path, sidecar)>, hash_to_path_cache)
+pub fn load_all_sidecars(
+	dir: &Path,
+	recursive: bool,
+) -> (Vec<(PathBuf, Sidecar)>, HashMap<String, PathBuf>) {
 	let sidecar_paths = scan(dir, recursive);
 
 	if sidecar_paths.is_empty() {
-		return Vec::new();
+		return (Vec::new(), HashMap::new());
 	}
 
 	crate::ui::debug("Building file hash cache...");
@@ -55,10 +60,10 @@ pub fn load_all_sidecars(dir: &Path, recursive: bool) -> Vec<(PathBuf, Sidecar)>
 		}
 	}
 
-	results
+	(results, hash_cache)
 }
 
-fn build_hash_cache(dir: &Path, recursive: bool) -> HashMap<String, PathBuf> {
+pub fn build_hash_cache(dir: &Path, recursive: bool) -> HashMap<String, PathBuf> {
 	let walker = if recursive {
 		WalkDir::new(dir)
 	} else {

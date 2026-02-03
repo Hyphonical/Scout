@@ -45,11 +45,7 @@ pub fn run(
 
 			// Load sidecars to build hash-to-path lookup
 			ui::debug("Loading sidecars for cached cluster display...");
-			let sidecars = index::load_all_sidecars(dir, recursive);
-			let hash_to_path: HashMap<String, PathBuf> = sidecars
-				.iter()
-				.map(|(path, sc)| (sc.hash().to_string(), path.clone()))
-				.collect();
+			let (_, hash_to_path) = index::load_all_sidecars(dir, recursive);
 
 			print_clusters(&cached_db, &hash_to_path);
 			println!(
@@ -69,7 +65,7 @@ pub fn run(
 		ui::path_link(dir, 40)
 	));
 
-	let sidecars = index::load_all_sidecars(dir, recursive);
+	let (sidecars, hash_to_path) = index::load_all_sidecars(dir, recursive);
 
 	if sidecars.is_empty() {
 		ui::warn("No embeddings found. Run 'scout scan' first");
@@ -77,12 +73,6 @@ pub fn run(
 	}
 
 	ui::success(&format!("Loaded {} embeddings", sidecars.len()));
-
-	// Build hash-to-path lookup
-	let hash_to_path: HashMap<String, PathBuf> = sidecars
-		.iter()
-		.map(|(path, sc)| (sc.hash().to_string(), path.clone()))
-		.collect();
 
 	// Log embedding statistics
 	if let Some((_, first_sidecar)) = sidecars.first() {

@@ -36,7 +36,7 @@ pub const VIDEO_FRAME_COUNT: usize = 10;
 
 // === Search Defaults ===
 pub const DEFAULT_LIMIT: usize = 10;
-pub const DEFAULT_MIN_SCORE: f32 = 0.1;
+pub const DEFAULT_MIN_SCORE: f32 = 0.05;
 pub const NEGATIVE_WEIGHT: f32 = 0.7;
 
 pub fn set_model_dir(path: PathBuf) {

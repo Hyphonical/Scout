@@ -72,25 +72,22 @@ pub fn run(
 		None
 	};
 
-	let sidecars = storage::scan(dir, recursive);
+	ui::info(&format!(
+		"Loading embeddings from {}",
+		ui::path_link(dir, 40)
+	));
+	let (sidecars, hash_cache) = storage::load_all_sidecars(dir, recursive);
 
 	if sidecars.is_empty() {
 		ui::warn("No indexed images found. Run 'scout scan' first.");
 		return Ok(());
 	}
 
+	ui::success(&format!("Loaded {} embeddings", sidecars.len()));
+
 	let mut matches = Vec::new();
-	let mut outdated = 0;
 
-	for (sidecar_path, media_dir) in sidecars {
-		let Ok(sidecar) = storage::load(&sidecar_path) else {
-			continue;
-		};
-
-		if !sidecar.is_current_version() {
-			outdated += 1;
-		}
-
+	for (_path, sidecar) in sidecars {
 		let hash = sidecar.hash().to_string();
 
 		match sidecar {
@@ -103,7 +100,7 @@ pub fn run(
 				}
 
 				if score >= min_score {
-					if let Some(image_path) = storage::find_file_by_hash(&media_dir, &hash) {
+					if let Some(image_path) = hash_cache.get(&hash) {
 						matches.push(Match {
 							path: image_path.to_string_lossy().to_string(),
 							score,
@@ -136,7 +133,7 @@ pub fn run(
 				}
 
 				if best_score >= min_score {
-					if let Some(video_path) = storage::find_file_by_hash(&media_dir, &hash) {
+					if let Some(video_path) = hash_cache.get(&hash) {
 						matches.push(Match {
 							path: video_path.to_string_lossy().to_string(),
 							score: best_score, // Clamp back to 0.0 for display
@@ -146,13 +143,6 @@ pub fn run(
 				}
 			}
 		}
-	}
-
-	if outdated > 0 {
-		ui::warn(&format!(
-			"{} sidecars are outdated. Run 'scout scan --force' to upgrade.",
-			outdated
-		));
 	}
 
 	// Filter out reference image if not including it
