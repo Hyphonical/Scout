@@ -1,8 +1,8 @@
 # Scout 🔍
 
-**Semantic image search that actually works locally.**
+**Semantic media search that actually works locally.**
 
-Find images by what's _in_ them, not what you named the file. No cloud, no API keys, no privacy concerns. Just you, your images, and some clever AI running on your machine.
+Find images and videos by what's _in_ them, not what you named the file. No cloud, no API keys, no privacy concerns. Just you, your media, and some clever AI running on your machine.
 
 ## Table of Contents
 
@@ -28,7 +28,7 @@ You know how you take a photo of a cool sunset, name it `IMG_2847.jpg`, and then
 
 Type `scout search "sunset over mountains"` and boom - every sunset you've ever photographed, ranked by relevance. Or feed it a reference image with `-i photo.jpg` for reverse image search. Or do _both_ simultaneously and weight them however you want. It's weirdly satisfying.
 
-Scout uses [SigLIP2](https://huggingface.co/onnx-community/siglip2-large-patch16-512-ONNX) vision-language models (the same tech that powers modern AI image understanding) to generate embeddings for your images. These embeddings capture semantic meaning, so "golden retriever" will find your dog photos even if you never tagged them.
+Scout uses [SigLIP2](https://huggingface.co/onnx-community/siglip2-large-patch16-512-ONNX) vision-language models (the same tech that powers modern AI image understanding) to generate embeddings for your media. These embeddings capture semantic meaning, so "golden retriever" will find your dog photos even if you never tagged them.
 
 ## Why Does This Exist?
 
@@ -103,10 +103,10 @@ scout cluster -d ~/Photos
 
 ## Documentation 📚
 
-- **[Getting Started](docs/getting-started.md)** - Installation, model setup, first steps
-- **[User Guide](docs/user-guide.md)** - Comprehensive feature documentation
-- **[Architecture](docs/architecture.md)** - Technical deep dive
-- **[Contributing](docs/contributing.md)** - Developer guide
+- **[User Guide](docs/USER-GUIDE.md)** - Comprehensive feature documentation
+- **[Clustering Guide](docs/CLUSTERING.md)** - How the clustering math works (UMAP & HDBSCAN)
+- **[Architecture](docs/ARCHITECTURE.md)** - Technical deep dive
+- **[Contributing](docs/CONTRIBUTING.md)** - Developer guide
 - **[Models](docs/MODELS.md)** - Model download and alternatives
 - **[Video Support](docs/INSTALL_FFMPEG.md)** - FFmpeg installation guide
 - **[Sidecar Format](docs/SIDECAR.md)** - Storage format details
