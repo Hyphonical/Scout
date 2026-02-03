@@ -44,7 +44,7 @@ pub fn cluster_embeddings(
 			"Dataset size ({}) > 50, applying UMAP",
 			sidecars.len()
 		));
-		crate::processing::umap::reduce_embeddings(&embeddings, 50, 15)?
+		crate::processing::umap::reduce_embeddings(&embeddings, 512, 15)?
 	} else {
 		if use_umap {
 			ui::debug("Dataset too small for UMAP (<50), using raw embeddings");

@@ -37,14 +37,13 @@ fn main() {
 	let result = match cli.command {
 		cli::Command::Scan {
 			dir,
-			recursive,
 			force,
 			min_resolution,
 			max_size,
 			exclude_videos,
 		} => commands::scan::run(
 			&dir,
-			recursive,
+			cli.recursive,
 			force,
 			min_resolution,
 			max_size,
@@ -56,7 +55,6 @@ fn main() {
 			weight,
 			not,
 			dir,
-			recursive,
 			limit,
 			score,
 			open,
@@ -68,7 +66,7 @@ fn main() {
 			weight,
 			not.as_deref(),
 			&dir,
-			recursive,
+			cli.recursive,
 			limit,
 			score,
 			open,
@@ -77,27 +75,25 @@ fn main() {
 		),
 		cli::Command::Cluster {
 			dir,
-			recursive,
 			force,
 			min_cluster_size,
 			min_samples,
 			use_umap,
 		} => commands::cluster::run(
 			&dir,
-			recursive,
+			cli.recursive,
 			force,
 			min_cluster_size,
 			min_samples,
 			use_umap,
 		),
-		cli::Command::Clean { dir, recursive } => commands::clean::run(&dir, recursive),
+		cli::Command::Clean { dir } => commands::clean::run(&dir, cli.recursive),
 		cli::Command::Watch {
 			dir,
-			recursive,
 			min_resolution,
 			max_size,
 			exclude_videos,
-		} => commands::watch::run(&dir, recursive, min_resolution, max_size, exclude_videos),
+		} => commands::watch::run(&dir, cli.recursive, min_resolution, max_size, exclude_videos),
 	};
 
 	if let Err(e) = result {

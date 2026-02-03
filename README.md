@@ -14,8 +14,9 @@ Find images by what's _in_ them, not what you named the file. No cloud, no API k
 - [Usage](#usage)
   - [`scan` - Index Images](#scan---index-images)
   - [`search` - Find Images](#search---find-images)
-  - [`watch` - Auto-Index New Files](#watch---auto-index-new-files)
+  - [`cluster` - Group Images by Similarity](#cluster---group-images-by-similarity)
   - [`clean` - Remove Orphaned Sidecars](#clean---remove-orphaned-sidecars)
+  - [`watch` - Auto-Index New Files](#watch---auto-index-new-files)
   - [Global Options](#global-options)
 - [Hardware Support](#hardware-support-)
 - [Contributing](#contributing)
@@ -44,6 +45,7 @@ So if you're the kind of person who has 10,000+ photos scattered across folders 
 - **📝 Text-based search**: Find images by natural language descriptions
 - **🖼️ Image-based search**: Reverse image search using a reference photo
 - **🔀 Hybrid search**: Combine text + image queries with adjustable weighting
+- **✨ HDBSCAN clustering**: Group images by visual similarity with optional dimensionality reduction
 - **🚫 Negative prompts**: Exclude unwanted content with `--not` flag
 - **🎬 Video support**: Index video files by extracting key frames (requires FFmpeg)
 - **📁 Recursive scanning**: Index entire directory trees in one go
@@ -94,6 +96,9 @@ scout search "cat sleeping on keyboard" -d ~/Photos
 
 # Image search
 scout search -i reference.jpg -d ~/Photos
+
+# Cluster images by visual similarity
+scout cluster -d ~/Photos
 ```
 
 ## Documentation 📚
@@ -143,7 +148,6 @@ Options:
   -i, --image <PATH>            Reference image for similarity search
   -w, --weight <0.0-1.0>        Text weight in combined search [default: 0.5]
   -d, --dir <PATH>              Directory to search [default: .]
-  -r, --recursive               Search subdirectories
   -n, --limit <N>               Max results to show [default: 10]
   -s, --score <FLOAT>           Minimum similarity score [default: 0.0]
   --not <QUERY>                 Negative prompt to exclude content
@@ -156,7 +160,7 @@ Options:
 
 ```bash
 # Text search
-scout search "beach sunset" -d ~/Photos -r
+scout search "beach sunset" -d ~/Photos
 
 # Image search
 scout search -i reference.jpg -d ~/Photos
@@ -171,6 +175,54 @@ scout search "woman on beach" --not "dog with frisbee"
 scout search "sunset" -o
 ```
 
+### `cluster` - Group images by visual similarity
+
+```bash
+scout cluster [OPTIONS]
+
+Options:
+  -d, --dir <PATH>              Directory to cluster [default: .]
+  -f, --force                   Force reclustering (ignore cache)
+  --min-cluster-size <N>        Minimum images per cluster [default: 5]
+  --min-samples <N>             Minimum samples for core points
+  --use-umap                    Use UMAP for dimensionality reduction (experimental)
+```
+
+**Examples:**
+
+```bash
+# Basic clustering
+scout cluster -d ~/Photos
+
+# Force reclustering
+scout cluster -d ~/Photos -f
+
+# Export similar images to organized folders
+scout cluster -d ~/Photos --use-umap
+
+# Stricter clustering (larger clusters)
+scout cluster -d ~/Photos --min-cluster-size 10
+```
+
+**How it works:**
+- Computes embeddings for all images in the collection
+- Groups similar images using HDBSCAN algorithm
+- Displays representative image for each cluster
+- Shows cluster cohesion score (how similar images in the cluster are)
+- Optional UMAP dimensionality reduction (512D) for large datasets
+- Results cached in `.scout/clusters.msgpack` (regenerate with `--force`)
+
+**Example output:**
+```
+✓ 19 clusters, 1384 images, 1180 noise (85.3%)
+
+Cluster 0 (33 images, 86.7% cohesion)
+  Representative: DA1AWQTKC46JM8D9SF9GJ7MSZ0.jpeg
+  [1] FK30SDJAMW44KAPK34JS01JSLQ.jpeg
+  [2] 1Q2ASFXAVAT0FAEMQ60F4SZMT0.jpeg
+  ... and 31 more
+```
+
 ### `clean` - Remove orphaned sidecars
 
 ```bash
@@ -178,18 +230,17 @@ scout clean [OPTIONS]
 
 Options:
   -d, --dir <PATH>     Directory to clean [default: .]
-  -r, --recursive      Clean subdirectories
 ```
 
 Deletes `.scout/` sidecar files for images that no longer exist.
-`watch` - Auto-index new files
+
+### `watch` - Auto-index new files
 
 ```bash
 scout watch [OPTIONS]
 
 Options:
   -d, --dir <PATH>              Directory to watch [default: .]
-  -r, --recursive               Watch subdirectories
   --exclude-videos              Skip video files
   --min-resolution <PIXELS>     Minimum resolution (shortest side in pixels)
   --max-size <MB>               Maximum file size in MB
@@ -210,24 +261,15 @@ Monitors a directory for new or modified media files and automatically indexes t
 # Watch current directory
 scout watch
 
-# Watch with recursive monitoring
-scout watch -d ~/Pictures -r
-
 # Watch with filters
 scout watch -d ~/Downloads --exclude-videos --min-resolution 512
 ```
-
-**Rename Immunity:** Scout now identifies files by their content hash (first 64KB), not by filename. This means you can:
-- Rename files freely without losing their index
-- Move files between folders (with their `.scout/` sidecars)
-- Reorganize your library without re-scanning
-- Search will always find the current filename via hash lookup
-
 
 ### Global options
 
 ```bash
 -v, --verbose                  Show debug output
+-r, --recursive                Include subdirectories (for all commands)
 -p, --provider <TYPE>          Force execution provider [auto,cpu,cuda,tensorrt,coreml,xnnpack]
 --model-dir <PATH>             Custom model directory
 --ffmpeg-path <PATH>           Custom FFmpeg executable path
@@ -236,11 +278,14 @@ scout watch -d ~/Downloads --exclude-videos --min-resolution 512
 **Examples:**
 
 ```bash
-# Use custom models
-scout search "cat" --model-dir ./my_models
+# Scan with recursive enabled and custom models
+scout -r scan -d photos/ --model-dir ./my_models
 
-# Force CPU execution
-scout scan -d ./photos --provider cpu --verbose
+# Force CPU execution for search
+scout --provider cpu search "cat"
+
+# Recursive clustering with verbose output
+scout -v -r cluster -d ~/Photos
 ```
 
 ## Hardware Support ⚡

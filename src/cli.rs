@@ -17,10 +17,13 @@ pub enum Provider {
 #[derive(Parser)]
 #[command(name = "scout", version, about = "AI-powered semantic image search")]
 pub struct Cli {
-	#[arg(short, long, global = true)]
+	#[arg(short, long, global = true, help = "Enable verbose logging")]
 	pub verbose: bool,
 
-	#[arg(long, global = true, value_enum)]
+	#[arg(short, long, global = true, help = "Recursively process directories")]
+	pub recursive: bool,
+
+	#[arg(long, global = true, value_enum, help = "Compute provider to use")]
 	pub provider: Option<Provider>,
 
 	#[arg(long, global = true, help = "Path to models directory")]
@@ -39,9 +42,6 @@ pub enum Command {
 	Scan {
 		#[arg(short, long, default_value = ".")]
 		dir: PathBuf,
-
-		#[arg(short, long)]
-		recursive: bool,
 
 		#[arg(short, long)]
 		force: bool,
@@ -78,9 +78,6 @@ pub enum Command {
 		#[arg(short, long, default_value = ".")]
 		dir: PathBuf,
 
-		#[arg(short, long)]
-		recursive: bool,
-
 		#[arg(short = 'n', long, default_value_t = crate::config::DEFAULT_LIMIT)]
 		limit: usize,
 
@@ -102,9 +99,6 @@ pub enum Command {
 		#[arg(short, long, default_value = ".")]
 		dir: PathBuf,
 
-		#[arg(short, long, default_value_t = true, help = "Include subdirectories")]
-		recursive: bool,
-
 		#[arg(short, long, help = "Force reclustering even if cached")]
 		force: bool,
 
@@ -125,18 +119,12 @@ pub enum Command {
 	Clean {
 		#[arg(short, long, default_value = ".")]
 		dir: PathBuf,
-
-		#[arg(short, long)]
-		recursive: bool,
 	},
 
 	/// Watch directory for changes and auto-index
 	Watch {
 		#[arg(short, long, default_value = ".")]
 		dir: PathBuf,
-
-		#[arg(short, long)]
-		recursive: bool,
 
 		#[arg(long, help = "Minimum resolution (shortest side in pixels)")]
 		min_resolution: Option<u32>,

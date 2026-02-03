@@ -392,6 +392,90 @@ pub fn set_ffmpeg_path(path: PathBuf)
 - Use FFmpeg select filter for efficient extraction
 - One FFmpeg invocation for all frames
 
+#### `cluster.rs`
+
+**Purpose:** HDBSCAN clustering for embeddings
+
+```rust
+pub fn cluster_embeddings(
+    sidecars: Vec<(PathBuf, Sidecar)>,
+    params: ClusterParams,
+    use_umap: bool,
+) -> Result<ClusterDatabase>
+```
+
+**Pipeline:**
+1. Extract embeddings from all sidecars
+2. Build hash-to-index lookup tables
+3. Optional UMAP dimensionality reduction (512D if > 50 samples)
+4. Configure HDBSCAN hyperparameters
+5. Run clustering algorithm
+6. Compute cluster metrics (representative, cohesion)
+7. Sort and re-ID clusters by size
+8. Return `ClusterDatabase` with results
+
+**Key functions:**
+- `find_representative()` - Finds image closest to cluster centroid
+- `compute_cohesion()` - Calculates average pairwise similarity within cluster
+- `compute_centroid()` - Computes mean embedding of cluster
+
+**Output:**
+```rust
+pub struct ClusterDatabase {
+    pub version: String,
+    pub timestamp: String,
+    pub params: ClusterParams,
+    pub clusters: Vec<Cluster>,
+    pub noise: Vec<String>,  // Outlier hashes
+    pub total_images: usize,
+}
+
+pub struct Cluster {
+    pub id: usize,
+    pub image_hashes: Vec<String>,
+    pub representative_hash: String,
+    pub cohesion: f32,  // 0.0-1.0
+}
+```
+
+#### `umap.rs`
+
+**Purpose:** Dimensionality reduction using UMAP
+
+```rust
+pub fn reduce_embeddings(
+    embeddings: &[Embedding],
+    n_components: usize,
+    n_neighbors: usize,
+) -> Result<Vec<Vec<f32>>>
+```
+
+**Pipeline:**
+1. Convert embeddings to ndarray format
+2. Compute K-nearest neighbors (brute-force)
+3. Initialize random embedding (range -10 to 10)
+4. Configure UMAP with graph and edge parameters
+5. Run optimization loop
+6. Extract and return reduced embeddings
+
+**Features:**
+- **Brute-force KNN**: Accurate but slower; suitable for < 50K points
+- **Random initialization**: Centered at origin, well-dispersed
+- **Default parameters:**
+  - `n_components`: 512 (try 256-1024 for different speed/quality tradeoffs)
+  - `n_neighbors`: 15 (balance between local and global structure)
+
+**Output:**
+- Vector of length `n_samples` containing `n_components`-dimensional embeddings
+- Same ordering as input embeddings
+
+**Trade-offs:**
+- ✅ Faster clustering on large datasets
+- ✅ Preserves local neighborhood structure
+- ❌ May lose fine-grained distinctions
+- ❌ Non-deterministic (random initialization)
+- 📊 Recommended only for 1000+ images
+
 ### `commands/` - Command Implementations
 
 #### `scan.rs`
@@ -427,6 +511,54 @@ pub fn set_ffmpeg_path(path: PathBuf)
 8. Truncate to limit
 9. Display results with timestamps (for videos)
 
+#### `cluster.rs`
+
+**Purpose:** Group images by visual similarity
+
+**Flow:**
+1. Load all embeddings from sidecars
+2. Optional: Reduce dimensions with UMAP (512D)
+3. Run HDBSCAN clustering algorithm
+4. Compute cluster metrics:
+   - Find representative image (closest to centroid)
+   - Calculate cohesion score (average pairwise similarity)
+5. Sort clusters by size (largest first)
+6. Cache results to `.scout/clusters.msgpack`
+7. Display cluster summary with examples
+
+**UMAP Integration:**
+- Triggers when dataset > 50 images and `--use-umap` flag
+- Reduces 1024D → 512D to balance speed vs. quality
+- Uses k=15 nearest neighbors for graph construction
+- Brute-force KNN computation (accurate for high dimensions)
+- Experimental feature for large collections
+
+**HDBSCAN Clustering:**
+- Density-based: finds variable-density clusters
+- Robust to noise: marks outliers as noise points
+- Works directly on high-dimensional embeddings
+- Parameters:
+  - `min_cluster_size`: Minimum images per cluster (default: 5)
+  - `min_samples`: Minimum samples for core points (optional)
+
+**Clustering Pipeline:**
+```
+Embeddings (1024D)
+    │
+    ├─> Optional UMAP (512D) ──> Reduced embeddings
+    │
+    └─────────────────────────> HDBSCAN Clustering
+                                    │
+                                    v
+                            Cluster labels (-1 = noise)
+                                    │
+                                    v
+                        Compute metrics (cohesion, representative)
+                                    │
+                                    v
+                            Sort and save results
+```
+
 #### `clean.rs`
 
 **Purpose:** Remove orphaned sidecars
@@ -438,6 +570,17 @@ pub fn set_ffmpeg_path(path: PathBuf)
    - If not, mark for deletion
 3. Delete orphaned sidecars
 4. Report count
+
+#### `watch.rs`
+
+**Purpose:** Monitor directory for changes and auto-index
+
+**Flow:**
+1. Set up file system watcher
+2. Listen for file events (create, modify, delete)
+3. Process new/modified files through scan pipeline
+4. Skip already-indexed files
+5. Run until stopped (Ctrl+C)
 
 ### `ui/` - User Interface
 

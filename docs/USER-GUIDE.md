@@ -5,6 +5,11 @@ Complete guide to using Scout's features.
 ## Table of Contents
 
 - [Commands](#commands)
+  - [scan](#scan---index-files)
+  - [search](#search---find-similar-files)
+  - [cluster](#cluster---group-by-similarity)
+  - [clean](#clean---remove-orphaned-sidecars)
+  - [watch](#watch---auto-index-new-files)
 - [Search Techniques](#search-techniques)
 - [Filtering](#filtering)
 - [Configuration](#configuration)
@@ -77,7 +82,6 @@ scout search [QUERY] [OPTIONS]
 - `-w, --weight <0.0-1.0>` - Text weight in combined search (default: 0.5)
 - `--not <QUERY>` - Negative prompt to exclude
 - `-d, --dir <DIR>` - Search directory (default: current)
-- `-r, --recursive` - Search subdirectories
 - `-n, --limit <NUM>` - Max results (default: 10)
 - `-s, --score <0.0-1.0>` - Minimum similarity score (default: 0.0)
 - `-o, --open` - Open first result
@@ -106,6 +110,86 @@ scout search "cat" -n 5 -s 0.3
 scout search "mountain landscape" -o
 ```
 
+### `cluster` - Group Images by Similarity
+
+Analyze your collection and group visually similar images together using HDBSCAN clustering.
+
+```bash
+scout cluster [OPTIONS]
+```
+
+**Options:**
+- `-d, --dir <DIR>` - Directory to cluster (default: current)
+- `-f, --force` - Force reclustering (ignore cache)
+- `--min-cluster-size <N>` - Minimum images per cluster (default: 5)
+- `--min-samples <N>` - Minimum samples for core points
+- `--use-umap` - Use UMAP dimensionality reduction (experimental)
+
+**Examples:**
+
+```bash
+# Basic clustering
+scout cluster -d ~/Photos
+
+# Force reclustering with UMAP
+scout cluster -d ~/Photos -f --use-umap
+
+# Larger clusters (more conservative)
+scout cluster -d ~/Photos --min-cluster-size 10
+
+# Recursive clustering
+scout -r cluster -d ~/Photos
+```
+
+**How it works:**
+1. Loads all embeddings from your indexed collection
+2. Groups similar images using HDBSCAN (density-based clustering)
+3. Computes representative image for each cluster
+4. Calculates cohesion score (measures cluster tightness: 0-1)
+5. Caches results in `.scout/clusters.msgpack`
+6. Optional UMAP: Reduces 1024D embeddings to 512D for faster processing
+
+**Understanding the output:**
+
+```
+✓ 19 clusters, 1384 images, 1180 noise (85.3%)
+
+Cluster 0 (33 images, 86.7% cohesion)
+  Representative: DA1AWQTKC46JM8D9SF9GJ7MSZ0.jpeg
+  [1] FK30SDJAMW44KAPK34JS01JSLQ.jpeg
+  [2] 1Q2ASFXAVAT0FAEMQ60F4SZMT0.jpeg
+  ... and 31 more
+
+Noise (1180 images)
+  Image00595_b.png
+  ...
+```
+
+- **Clusters**: Groups of similar images
+- **Noise**: Images too different from any cluster (similarity outliers)
+- **Cohesion**: How similar images within the cluster are (higher = better)
+- **Representative**: Best example image for the cluster
+
+**UMAP Dimensionality Reduction (experimental):**
+- Automatically applied when clustering > 50 images with `--use-umap`
+- Reduces dimensions from 1024D to 512D
+- Makes clustering faster for large collections
+- Trade-off: May lose some fine-grained similarity distinctions
+- Useful for: Very large collections (10,000+ images)
+
+**Use cases:**
+- **Discovery:** Explore how images naturally group together
+- **Duplicate detection:** Find near-duplicate or similar photos
+- **Organization:** Identify groups that could be organized into folders
+- **Cleanup:** Find outlier noise images that stand out
+- **Manual organization:** Use clusters as a guide for manual folder structure
+
+**Performance notes:**
+- First clustering: Depends on collection size (minutes for 10K+ images with GPU)
+- Cached clustering: Instant reload from disk
+- Clear cache with `--force` to force reclustering
+- No central database: Uses sidecars you already have
+
 ### `clean` - Remove Orphaned Sidecars
 
 Remove `.scout` sidecars for deleted/moved files.
@@ -121,8 +205,41 @@ scout clean [OPTIONS]
 **Example:**
 
 ```bash
-scout clean -d photos/ -r
+scout -r clean -d photos/
 ```
+
+### `watch` - Auto-Index New Files
+
+Monitor a directory and automatically index new media files.
+
+```bash
+scout watch [OPTIONS]
+```
+
+**Options:**
+- `-d, --dir <DIR>` - Directory to watch (default: current)
+- `--exclude-videos` - Skip video files
+- `--min-resolution <PIXELS>` - Minimum resolution
+- `--max-size <MB>` - Maximum file size
+
+**Examples:**
+
+```bash
+# Watch current directory
+scout watch
+
+# Watch downloads folder
+scout watch -d ~/Downloads
+
+# With filters
+scout watch -d ~/Pictures --exclude-videos --min-resolution 512
+```
+
+**How it works:**
+- Uses file system notifications (OS-level, efficient)
+- Processes new/modified files in real-time
+- Skips already-indexed files (hash-based deduplication)
+- Runs until stopped with `Ctrl+C`
 
 ---
 
