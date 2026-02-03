@@ -2,6 +2,7 @@
 
 use anyhow::{anyhow, Result};
 use colored::*;
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 use crate::config::NEGATIVE_WEIGHT;
@@ -10,10 +11,20 @@ use crate::models::Models;
 use crate::storage;
 use crate::ui;
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Match {
 	pub path: String,
 	pub score: f32,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub timestamp: Option<f64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub hash: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct SearchExport {
+	query: String,
+	results: Vec<Match>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -29,6 +40,8 @@ pub fn run(
 	open_first: bool,
 	include_ref: bool,
 	exclude_videos: bool,
+	paths_only: bool,
+	export: Option<&Path>,
 ) -> Result<()> {
 	let search_start = std::time::Instant::now();
 
@@ -105,6 +118,7 @@ pub fn run(
 							path: image_path.to_string_lossy().to_string(),
 							score,
 							timestamp: None,
+							hash: Some(hash.clone()),
 						});
 					}
 				}
@@ -138,6 +152,7 @@ pub fn run(
 							path: video_path.to_string_lossy().to_string(),
 							score: best_score, // Clamp back to 0.0 for display
 							timestamp: Some(best_timestamp),
+							hash: Some(hash.clone()),
 						});
 					}
 				}
@@ -173,6 +188,43 @@ pub fn run(
 		return Ok(());
 	}
 
+	// Build query string for export
+	let query_string = match (query_text, query_image) {
+		(Some(text), None) => text.to_string(),
+		(None, Some(img_path)) => format!("image:{}", img_path.display()),
+		(Some(text), Some(img_path)) => format!("{} + image:{}", text, img_path.display()),
+		(None, None) => String::new(),
+	};
+
+	// Handle --export flag
+	if let Some(export_path) = export {
+		let export_data = SearchExport {
+			query: query_string,
+			results: matches.clone(),
+		};
+		let json = serde_json::to_string_pretty(&export_data)?;
+
+		if export_path.to_str() == Some("-") || export_path.as_os_str().is_empty() {
+			// Output to stdout
+			println!("{}", json);
+		} else {
+			// Write to file
+			std::fs::write(export_path, json)?;
+			ui::success(&format!("Exported to {}", export_path.display()));
+		}
+		return Ok(());
+	}
+
+	// Handle --paths flag
+	if paths_only {
+		// Output paths to stdout, all logging already went to stderr
+		for m in &matches {
+			println!("{}", m.path);
+		}
+		return Ok(());
+	}
+
+	// Normal interactive output
 	ui::header("Results");
 
 	for (i, m) in matches.iter().enumerate() {

@@ -92,6 +92,12 @@ pub enum Command {
 
 		#[arg(long, help = "Exclude videos from results")]
 		exclude_videos: bool,
+
+		#[arg(long, help = "Output only paths to stdout")]
+		paths: bool,
+
+		#[arg(long, help = "Export results as JSON to file")]
+		export: Option<PathBuf>,
 	},
 
 	/// Cluster images by visual similarity
@@ -121,6 +127,9 @@ pub enum Command {
 			help = "Number of images to show per cluster"
 		)]
 		preview_count: usize,
+
+		#[arg(long, help = "Export results as JSON to file")]
+		export: Option<PathBuf>,
 	},
 
 	/// Remove orphaned sidecars

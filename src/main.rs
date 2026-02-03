@@ -13,9 +13,8 @@ use clap::Parser;
 fn main() {
 	let cli = cli::Cli::parse();
 
-	// Show logo with slogan
 	ui::log::print_logo();
-	println!();
+	eprintln!();
 
 	ui::Log::set_verbose(cli.verbose);
 
@@ -60,6 +59,8 @@ fn main() {
 			open,
 			include_ref,
 			exclude_videos,
+			paths,
+			export,
 		} => commands::search::run(
 			query.as_deref(),
 			image.as_deref(),
@@ -72,6 +73,8 @@ fn main() {
 			open,
 			include_ref,
 			exclude_videos,
+			paths,
+			export.as_deref(),
 		),
 		cli::Command::Cluster {
 			dir,
@@ -80,6 +83,7 @@ fn main() {
 			min_samples,
 			use_umap,
 			preview_count,
+			export,
 		} => commands::cluster::run(
 			&dir,
 			cli.recursive,
@@ -88,6 +92,7 @@ fn main() {
 			min_samples,
 			use_umap,
 			preview_count,
+			export.as_deref(),
 		),
 		cli::Command::Clean { dir } => commands::clean::run(&dir, cli.recursive),
 		cli::Command::Watch {

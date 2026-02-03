@@ -35,8 +35,8 @@ pub fn random_slogan() -> &'static str {
 }
 
 pub fn print_logo() {
-	println!("{}", LOGO.bright_blue().bold());
-	println!("{}", random_slogan().dimmed().italic());
+	eprintln!("{}", LOGO.bright_blue().bold());
+	eprintln!("{}", random_slogan().dimmed().italic());
 }
 
 pub struct Log;
@@ -52,29 +52,29 @@ impl Log {
 }
 
 pub fn info(msg: &str) {
-	println!("{} {}", "ℹ".bright_blue().bold(), msg.bright_white());
+	eprintln!("{} {}", "ℹ".bright_blue().bold(), msg.bright_white());
 }
 
 pub fn success(msg: &str) {
-	println!("{} {}", "✓".bright_green().bold(), msg.bright_white());
+	eprintln!("{} {}", "✓".bright_green().bold(), msg.bright_white());
 }
 
 pub fn warn(msg: &str) {
-	println!("{} {}", "⚠".bright_yellow().bold(), msg.bright_white());
+	eprintln!("{} {}", "⚠".bright_yellow().bold(), msg.bright_white());
 }
 
 pub fn error(msg: &str) {
-	println!("{} {}", "✗".bright_red().bold(), msg.bright_white());
+	eprintln!("{} {}", "✗".bright_red().bold(), msg.bright_white());
 }
 
 pub fn debug(msg: &str) {
 	if Log::is_verbose() {
-		println!("{} {}", "⚙".bright_black().bold(), msg.dimmed());
+		eprintln!("{} {}", "⚙".bright_black().bold(), msg.dimmed());
 	}
 }
 
 pub fn header(text: &str) {
-	println!("\n{}", text.bright_blue().bold());
+	eprintln!("\n{}", text.bright_blue().bold());
 }
 
 /// Clickable file path (OSC 8 terminal hyperlink)
