@@ -36,6 +36,8 @@ scout scan [OPTIONS]
 - `--min-resolution <PIXELS>` - Skip images smaller than this (shortest side)
 - `--max-size <MB>` - Skip files larger than this
 - `--exclude-videos` - Skip video files
+- `--max-frames <N>` - Maximum frames per video (default: 15)
+- `--scene-threshold <0.0-1.0>` - Scene detection sensitivity (default: 0.3, lower = more sensitive)
 
 **Examples:**
 
@@ -54,6 +56,9 @@ scout scan -r --min-resolution 512 --max-size 50
 
 # Images only, no videos
 scout scan -r --exclude-videos
+
+# Custom video extraction (more sensitive scene detection)
+scout scan -d ./videos -r --scene-threshold 0.2 --max-frames 20
 ```
 
 **What happens during scan:**
@@ -64,7 +69,9 @@ scout scan -r --exclude-videos
    - Loads image and generates embedding
    - Saves `.scout/<hash>.msgpack` sidecar
 3. For videos (if FFmpeg available):
-   - Extracts 10 evenly-spaced frames
+   - Analyzes video using FFmpeg's scene detection filter
+   - Extracts frames at scene changes (1-15 frames depending on content)
+   - Static videos extract fewer frames, dynamic videos extract more
    - Generates embeddings for each frame
    - Saves multi-frame sidecar
 
@@ -290,6 +297,8 @@ scout watch [OPTIONS]
 - `--exclude-videos` - Skip video files
 - `--min-resolution <PIXELS>` - Minimum resolution
 - `--max-size <MB>` - Maximum file size
+- `--max-frames <N>` - Maximum frames per video (default: 15)
+- `--scene-threshold <0.0-1.0>` - Scene detection sensitivity (default: 0.3)
 
 **Examples:**
 
@@ -519,7 +528,7 @@ scout --provider cuda scan -d photos/
 
 ## Video Support
 
-Scout can search within videos by extracting and encoding frames.
+Scout can search within videos by intelligently extracting and encoding frames at scene changes.
 
 ### Requirements
 
@@ -546,10 +555,21 @@ sudo dnf install ffmpeg  # Fedora
 
 ### How It Works
 
-1. FFmpeg extracts 10 evenly-spaced frames
-2. Each frame encoded separately
-3. Search finds best-matching frame
-4. Results show timestamp (MM:SS)
+1. FFmpeg analyzes video for scene changes using its scene detection filter
+2. Frames extracted at detected scene boundaries (not at fixed intervals)
+3. Static videos (1 scene) extract 1-4 frames
+4. Dynamic videos (many scenes) extract up to 15 frames at key moments
+5. Each frame encoded separately with SigLIP2
+6. Search finds best-matching frame across all videos
+7. Results show timestamp (MM:SS) and frame location
+
+**Scene detection parameters:**
+- `--scene-threshold`: Controls sensitivity (0.0-1.0, default: 0.3)
+  - Lower values = more sensitive (detects subtle scene changes)
+  - Higher values = less sensitive (only major scene changes)
+- `--max-frames`: Cap on frames per video (default: 15)
+  - Prevents excessive extraction for very dynamic content
+  - If more scenes detected, frames are sampled evenly
 
 ### Example
 
@@ -563,6 +583,22 @@ Output:
 Results
  1. vacation.mp4 @ 01:23 87% 🔥
  2. family_trip.mkv @ 00:45 76%
+```
+
+### Advanced Video Options
+
+```bash
+# More sensitive scene detection (extracts more frames)
+scout scan -d videos/ --scene-threshold 0.2
+
+# Less sensitive (only major scene changes)
+scout scan -d videos/ --scene-threshold 0.5
+
+# Limit frames for large collections
+scout scan -d videos/ --max-frames 10
+
+# Maximum detail extraction
+scout scan -d videos/ --scene-threshold 0.1 --max-frames 20
 ```
 
 ### Disable Videos

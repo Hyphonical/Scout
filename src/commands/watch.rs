@@ -18,6 +18,8 @@ use crate::ui;
 struct WatchTask {
 	path: PathBuf,
 	media_type: MediaType,
+	max_frames: usize,
+	scene_threshold: f32,
 }
 
 pub fn run(
@@ -26,8 +28,13 @@ pub fn run(
 	min_resolution: Option<u32>,
 	max_size: Option<u64>,
 	exclude_videos: bool,
+	max_frames: Option<usize>,
+	scene_threshold: Option<f32>,
 ) -> Result<()> {
 	ui::info(&format!("Watching: {}", dir.display()));
+
+	let max_frames = max_frames.unwrap_or(crate::config::MAX_VIDEO_FRAMES);
+	let scene_threshold = scene_threshold.unwrap_or(crate::config::SCENE_THRESHOLD);
 
 	// 1. Check FFmpeg availability
 	let video_supported = if exclude_videos {
@@ -100,7 +107,12 @@ pub fn run(
 			}
 
 			// Send to worker
-			let _ = tx.send(WatchTask { path, media_type });
+			let _ = tx.send(WatchTask {
+				path,
+				media_type,
+				max_frames,
+				scene_threshold,
+			});
 		}
 	};
 
@@ -199,9 +211,13 @@ fn process_task(models: &Arc<Mutex<Models>>, task: &WatchTask) -> Result<()> {
 			MediaType::Image => {
 				crate::commands::scan::process_image(&mut models_guard, &file, media_dir)?
 			}
-			MediaType::Video => {
-				crate::commands::scan::process_video(&mut models_guard, &file, media_dir)?
-			}
+			MediaType::Video => crate::commands::scan::process_video(
+				&mut models_guard,
+				&file,
+				media_dir,
+				task.max_frames,
+				task.scene_threshold,
+			)?,
 		}
 	} // Lock is automatically released here
 

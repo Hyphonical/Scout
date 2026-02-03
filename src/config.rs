@@ -31,8 +31,11 @@ pub const VIDEO_EXTENSIONS: &[&str] = &[
 	"mp4", "mkv", "avi", "mov", "wmv", "flv", "webm", "m4v", "mpg", "mpeg",
 ];
 
-/// Number of frames to extract from videos
-pub const VIDEO_FRAME_COUNT: usize = 10;
+/// Maximum number of frames to extract from videos (used with scene detection)
+pub const MAX_VIDEO_FRAMES: usize = 15;
+
+/// Scene detection threshold (0.0-1.0). Lower = more sensitive
+pub const SCENE_THRESHOLD: f32 = 0.3;
 
 // === Search Defaults ===
 pub const DEFAULT_LIMIT: usize = 10;

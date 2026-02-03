@@ -47,7 +47,7 @@ So if you're the kind of person who has 10,000+ photos scattered across folders 
 - **🔀 Hybrid search**: Combine text + image queries with adjustable weighting
 - **✨ HDBSCAN clustering**: Group media by visual similarity with optional dimensionality reduction
 - **🚫 Negative prompts**: Exclude unwanted content with `--not` flag
-- **🎬 Video support**: Index video files by extracting key frames (requires FFmpeg)
+- **🎬 Video support**: Index video files using intelligent scene detection (requires FFmpeg)
 - **📁 Recursive scanning**: Index entire directory trees in one go
 - **⚙️ Smart filtering**: Exclude videos, set minimum resolution, file size limits
 - **🔧 Custom model paths**: Specify custom ONNX models via CLI or environment
@@ -127,7 +127,12 @@ Options:
   --exclude-videos              Skip video files
   --min-resolution <PIXELS>     Minimum resolution (shortest side in pixels)
   --max-size <MB>               Maximum file size in MB
+  --max-frames <N>              Maximum frames per video [default: 15]
+  --scene-threshold <0.0-1.0>   Scene detection threshold [default: 0.3]
 ```
+
+> [!TIP]
+> **Video frame extraction uses intelligent scene detection**: Instead of extracting frames at fixed intervals, Scout analyzes video content to identify scene changes. Static videos (like a single pose or interview) extract 1-4 frames, while action-packed videos extract up to 15 frames at key moments. Adjust `--scene-threshold` (lower = more sensitive) and `--max-frames` to control behavior.
 
 **Examples:**
 ```bash
@@ -139,6 +144,9 @@ scout scan -d ./photos -r --exclude-videos
 
 # With filtering
 scout scan -d ./photos -r --min-resolution 512 --max-size 50
+
+# Custom video extraction (more sensitive scene detection)
+scout scan -d ./videos -r --scene-threshold 0.2 --max-frames 20
 ```
 
 ### `search` - Find media
@@ -300,6 +308,8 @@ Options:
   --exclude-videos              Skip video files
   --min-resolution <PIXELS>     Minimum resolution (shortest side in pixels)
   --max-size <MB>               Maximum file size in MB
+  --max-frames <N>              Maximum frames per video [default: 15]
+  --scene-threshold <0.0-1.0>   Scene detection threshold [default: 0.3]
 ```
 
 Monitors a directory for new or modified media files and automatically indexes them in real-time. Perfect for download folders, camera uploads, or ongoing projects.

@@ -153,14 +153,18 @@ fn parse_fraction(s: &str) -> Option<f64> {
 	}
 }
 
-/// Extract evenly-spaced frames from video
-pub fn extract_frames(path: &Path, count: usize) -> Result<Vec<(f64, RgbImage)>> {
+/// Extract frames using scene detection
+pub fn extract_frames_scene(
+	path: &Path,
+	max_frames: usize,
+	threshold: f32,
+) -> Result<Vec<(f64, RgbImage)>> {
 	if !is_available() {
 		anyhow::bail!("FFmpeg not found in PATH");
 	}
 
-	if count == 0 {
-		anyhow::bail!("Frame count must be at least 1");
+	if max_frames == 0 {
+		anyhow::bail!("Max frames must be at least 1");
 	}
 
 	let (duration, width, height, fps) = probe_video(path)?;
@@ -169,85 +173,148 @@ pub fn extract_frames(path: &Path, count: usize) -> Result<Vec<(f64, RgbImage)>>
 		anyhow::bail!("Invalid video duration: {:.2}s", duration);
 	}
 
+	// First pass: detect scene changes
+	let scene_times = detect_scenes(path, threshold)?;
+
+	let frame_count = scene_times.len();
+	let timestamps = if frame_count <= max_frames {
+		// Use all detected scenes
+		scene_times
+	} else {
+		// Too many scenes - sample evenly from detected scenes
+		sample_timestamps(&scene_times, max_frames)
+	};
+
+	let actual_count = timestamps.len();
+
 	ui::debug(&format!(
-		"Video: {:.1}s, {}x{} @ {:.1}fps. Extracting {} frames...",
-		duration, width, height, fps, count
+		"Video: {:.1}s, {}x{} @ {:.1}fps | Scenes: {} → Frames: {}",
+		duration, width, height, fps, frame_count, actual_count
 	));
 
-	// Calculate timestamps for evenly-spaced frames
-	let interval = duration / count as f64;
-	let timestamps: Vec<f64> = (0..count).map(|i| (i as f64 + 0.5) * interval).collect();
+	if timestamps.is_empty() {
+		anyhow::bail!("No scene changes detected");
+	}
 
-	// Calculate frame numbers
-	let frame_numbers: Vec<usize> = timestamps
-		.iter()
-		.map(|&ts| (ts * fps).round() as usize)
-		.collect();
+	// Extract frames at detected timestamps
+	extract_frames_at_timestamps(path, &timestamps, width, height)
+}
 
-	// Build select filter
-	let select_expr = frame_numbers
-		.iter()
-		.map(|n| format!("eq(n,{})", n))
-		.collect::<Vec<_>>()
-		.join("+");
-
-	// Extract frames in one FFmpeg call
-	let mut child = Command::new(get_ffmpeg_binary())
+/// Detect scene changes in video and return timestamps
+fn detect_scenes(path: &Path, threshold: f32) -> Result<Vec<f64>> {
+	// Use FFmpeg's scene detection filter
+	let output = Command::new(get_ffmpeg_binary())
 		.arg("-i")
 		.arg(path)
 		.arg("-vf")
-		.arg(format!("select='{}'", select_expr))
-		.arg("-vsync")
-		.arg("0")
+		.arg(format!("select='gt(scene,{})',showinfo", threshold))
 		.arg("-f")
-		.arg("rawvideo")
-		.arg("-pix_fmt")
-		.arg("rgb24")
-		.arg("-hide_banner")
-		.arg("-loglevel")
-		.arg("error")
-		.arg("pipe:1")
-		.stdout(Stdio::piped())
+		.arg("null")
+		.arg("-")
 		.stderr(Stdio::piped())
-		.spawn()
-		.context("Failed to spawn FFmpeg")?;
+		.output()
+		.context("Failed to run FFmpeg scene detection")?;
 
-	// Read all frame data
-	let mut frame_data = Vec::new();
-	if let Some(mut stdout) = child.stdout.take() {
-		stdout
-			.read_to_end(&mut frame_data)
-			.context("Failed to read frames from FFmpeg")?;
+	if !output.status.success() {
+		anyhow::bail!("FFmpeg scene detection failed");
 	}
 
-	let status = child.wait().context("FFmpeg process failed")?;
+	// Parse scene timestamps from stderr
+	let stderr = String::from_utf8_lossy(&output.stderr);
+	let mut timestamps = Vec::new();
 
-	if !status.success() {
-		let mut stderr = String::new();
-		if let Some(mut err) = child.stderr {
-			err.read_to_string(&mut stderr).ok();
+	for line in stderr.lines() {
+		if line.contains("pts_time:") {
+			if let Some(pts_start) = line.find("pts_time:") {
+				let pts_str = &line[pts_start + 9..];
+				if let Some(end) = pts_str.find(char::is_whitespace) {
+					if let Ok(time) = pts_str[..end].parse::<f64>() {
+						timestamps.push(time);
+					}
+				}
+			}
 		}
-		anyhow::bail!("FFmpeg failed: {}", stderr.trim());
 	}
 
-	// Parse frames
-	let frame_size = (width * height * 3) as usize;
-	let actual_count = frame_data.len() / frame_size;
-
-	if actual_count == 0 {
-		anyhow::bail!("No frames extracted");
+	// Always include first frame if no scenes detected
+	if timestamps.is_empty() {
+		timestamps.push(0.5);
 	}
 
+	Ok(timestamps)
+}
+
+/// Sample timestamps evenly from a larger set
+fn sample_timestamps(timestamps: &[f64], count: usize) -> Vec<f64> {
+	if timestamps.len() <= count {
+		return timestamps.to_vec();
+	}
+
+	let step = timestamps.len() as f64 / count as f64;
+	(0..count)
+		.map(|i| {
+			let idx = (i as f64 * step).floor() as usize;
+			timestamps[idx.min(timestamps.len() - 1)]
+		})
+		.collect()
+}
+
+/// Extract frames at specific timestamps
+fn extract_frames_at_timestamps(
+	path: &Path,
+	timestamps: &[f64],
+	width: u32,
+	height: u32,
+) -> Result<Vec<(f64, RgbImage)>> {
 	let mut frames = Vec::new();
-	for (i, chunk) in frame_data.chunks_exact(frame_size).enumerate() {
-		if i >= timestamps.len() {
-			break;
+
+	for &timestamp in timestamps {
+		// Extract single frame at timestamp
+		let mut child = Command::new(get_ffmpeg_binary())
+			.arg("-ss")
+			.arg(format!("{:.3}", timestamp))
+			.arg("-i")
+			.arg(path)
+			.arg("-frames:v")
+			.arg("1")
+			.arg("-f")
+			.arg("rawvideo")
+			.arg("-pix_fmt")
+			.arg("rgb24")
+			.arg("-hide_banner")
+			.arg("-loglevel")
+			.arg("error")
+			.arg("pipe:1")
+			.stdout(Stdio::piped())
+			.stderr(Stdio::piped())
+			.spawn()
+			.context("Failed to spawn FFmpeg")?;
+
+		let mut frame_data = Vec::new();
+		if let Some(mut stdout) = child.stdout.take() {
+			stdout
+				.read_to_end(&mut frame_data)
+				.context("Failed to read frame from FFmpeg")?;
 		}
 
-		let image = RgbImage::from_raw(width, height, chunk.to_vec())
-			.context("Failed to create image from frame data")?;
+		let status = child.wait().context("FFmpeg process failed")?;
 
-		frames.push((timestamps[i], image));
+		if !status.success() {
+			continue; // Skip failed frames
+		}
+
+		let frame_size = (width * height * 3) as usize;
+		if frame_data.len() >= frame_size {
+			if let Some(image) =
+				RgbImage::from_raw(width, height, frame_data[..frame_size].to_vec())
+			{
+				frames.push((timestamp, image));
+			}
+		}
+	}
+
+	if frames.is_empty() {
+		anyhow::bail!("Failed to extract any frames");
 	}
 
 	Ok(frames)

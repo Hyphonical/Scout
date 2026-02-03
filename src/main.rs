@@ -40,6 +40,8 @@ fn main() {
 			min_resolution,
 			max_size,
 			exclude_videos,
+			max_frames,
+			scene_threshold,
 		} => commands::scan::run(
 			&dir,
 			cli.recursive,
@@ -47,6 +49,8 @@ fn main() {
 			min_resolution,
 			max_size,
 			exclude_videos,
+			max_frames,
+			scene_threshold,
 		),
 		cli::Command::Search {
 			query,
@@ -100,12 +104,16 @@ fn main() {
 			min_resolution,
 			max_size,
 			exclude_videos,
+			max_frames,
+			scene_threshold,
 		} => commands::watch::run(
 			&dir,
 			cli.recursive,
 			min_resolution,
 			max_size,
 			exclude_videos,
+			max_frames,
+			scene_threshold,
 		),
 	};
 

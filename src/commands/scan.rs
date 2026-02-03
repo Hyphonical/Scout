@@ -4,13 +4,14 @@ use anyhow::Result;
 use std::path::Path;
 use std::time::Instant;
 
-use crate::config::VIDEO_FRAME_COUNT;
+use crate::config::{MAX_VIDEO_FRAMES, SCENE_THRESHOLD};
 use crate::core::MediaType;
 use crate::models::Models;
 use crate::processing;
 use crate::storage;
 use crate::ui;
 
+#[allow(clippy::too_many_arguments)]
 pub fn run(
 	dir: &Path,
 	recursive: bool,
@@ -18,6 +19,8 @@ pub fn run(
 	min_resolution: Option<u32>,
 	max_size: Option<u64>,
 	exclude_videos: bool,
+	max_frames: Option<usize>,
+	scene_threshold: Option<f32>,
 ) -> Result<()> {
 	let start = Instant::now();
 
@@ -69,6 +72,9 @@ pub fn run(
 	let mut errors = 0;
 	let mut skipped_videos = 0;
 
+	let max_frames = max_frames.unwrap_or(MAX_VIDEO_FRAMES);
+	let scene_threshold = scene_threshold.unwrap_or(SCENE_THRESHOLD);
+
 	for file in scan_result.to_process {
 		let media_dir = file.path.parent().unwrap();
 		let file_start = Instant::now();
@@ -80,7 +86,7 @@ pub fn run(
 					skipped_videos += 1;
 					continue;
 				}
-				process_video(&mut models, &file, media_dir)
+				process_video(&mut models, &file, media_dir, max_frames, scene_threshold)
 			}
 		};
 
@@ -134,8 +140,10 @@ pub fn process_video(
 	models: &mut Models,
 	file: &processing::scan::MediaFile,
 	media_dir: &Path,
+	max_frames: usize,
+	scene_threshold: f32,
 ) -> Result<()> {
-	let frames = processing::video::extract_frames(&file.path, VIDEO_FRAME_COUNT)?;
+	let frames = processing::video::extract_frames_scene(&file.path, max_frames, scene_threshold)?;
 
 	let mut encoded_frames = Vec::new();
 	for (timestamp, frame_img) in frames {

@@ -79,10 +79,7 @@ pub fn run(
 				format!("Clustered at: {}", cached_db.timestamp).dimmed()
 			));
 
-			ui::debug(&format!(
-				"{}",
-				"Run with --force to recluster".dimmed()
-			));
+			ui::debug(&format!("{}", "Run with --force to recluster".dimmed()));
 			return Ok(());
 		}
 	} else {

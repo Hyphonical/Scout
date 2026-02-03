@@ -54,6 +54,12 @@ pub enum Command {
 
 		#[arg(long, help = "Skip video files")]
 		exclude_videos: bool,
+
+		#[arg(long, help = "Maximum frames to extract per video")]
+		max_frames: Option<usize>,
+
+		#[arg(long, help = "Scene detection threshold (0.0-1.0)")]
+		scene_threshold: Option<f32>,
 	},
 
 	/// Search indexed media
@@ -151,5 +157,11 @@ pub enum Command {
 
 		#[arg(long, help = "Skip video files")]
 		exclude_videos: bool,
+
+		#[arg(long, help = "Maximum frames to extract per video")]
+		max_frames: Option<usize>,
+
+		#[arg(long, help = "Scene detection threshold (0.0-1.0)")]
+		scene_threshold: Option<f32>,
 	},
 }
