@@ -38,6 +38,7 @@ pub const VIDEO_FRAME_COUNT: usize = 10;
 pub const DEFAULT_LIMIT: usize = 10;
 pub const DEFAULT_MIN_SCORE: f32 = 0.05;
 pub const NEGATIVE_WEIGHT: f32 = 0.7;
+pub const DEFAULT_CLUSTER_PREVIEW: usize = 5;
 
 pub fn set_model_dir(path: PathBuf) {
 	let _ = CUSTOM_MODEL_DIR.set(path);

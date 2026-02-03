@@ -113,6 +113,14 @@ pub enum Command {
 			help = "Use UMAP dimensionality reduction (faster for large datasets)"
 		)]
 		use_umap: bool,
+
+		#[arg(
+			short = 'p',
+			long,
+			default_value_t = crate::config::DEFAULT_CLUSTER_PREVIEW,
+			help = "Number of images to show per cluster"
+		)]
+		preview_count: usize,
 	},
 
 	/// Remove orphaned sidecars

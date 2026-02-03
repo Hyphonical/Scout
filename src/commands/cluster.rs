@@ -21,6 +21,7 @@ pub fn run(
 	min_cluster_size: usize,
 	min_samples: Option<usize>,
 	use_umap: bool,
+	preview_count: usize,
 ) -> Result<()> {
 	let clusters_path = dir.join(SIDECAR_DIR).join(CLUSTERS_FILE);
 
@@ -47,7 +48,7 @@ pub fn run(
 			ui::debug("Loading sidecars for cached cluster display...");
 			let (_, hash_to_path) = index::load_all_sidecars(dir, recursive);
 
-			print_clusters(&cached_db, &hash_to_path);
+			print_clusters(&cached_db, &hash_to_path, preview_count);
 			println!(
 				"\n{}",
 				format!("Clustered at: {}", cached_db.timestamp).dimmed()
@@ -121,7 +122,7 @@ pub fn run(
 	save_clusters(dir, &cluster_db)?;
 
 	// Print results
-	print_clusters(&cluster_db, &hash_to_path);
+	print_clusters(&cluster_db, &hash_to_path, preview_count);
 	println!(
 		"\n{}",
 		format!("Completed in {:.1}s", duration.as_secs_f32()).dimmed()
@@ -139,7 +140,11 @@ fn load_cached_clusters(path: &Path) -> Option<ClusterDatabase> {
 	rmp_serde::from_slice(&bytes).ok()
 }
 
-fn print_clusters(db: &ClusterDatabase, hash_to_path: &HashMap<String, PathBuf>) {
+fn print_clusters(
+	db: &ClusterDatabase,
+	hash_to_path: &HashMap<String, PathBuf>,
+	preview_count: usize,
+) {
 	ui::success(&format!(
 		"{} clusters, {} images, {} noise ({:.1}%)",
 		db.clusters.len(),
@@ -166,8 +171,8 @@ fn print_clusters(db: &ClusterDatabase, hash_to_path: &HashMap<String, PathBuf>)
 			);
 		}
 
-		// Show first 5 images
-		for (i, hash) in cluster.image_hashes.iter().take(5).enumerate() {
+		// Show preview images/videos
+		for (i, hash) in cluster.image_hashes.iter().take(preview_count).enumerate() {
 			if let Some(path) = hash_to_path.get(hash) {
 				println!(
 					"  {} {}",
@@ -177,10 +182,14 @@ fn print_clusters(db: &ClusterDatabase, hash_to_path: &HashMap<String, PathBuf>)
 			}
 		}
 
-		if cluster.image_hashes.len() > 5 {
+		if cluster.image_hashes.len() > preview_count {
 			println!(
 				"  {}",
-				format!("... and {} more", cluster.image_hashes.len() - 5).dimmed()
+				format!(
+					"... and {} more",
+					cluster.image_hashes.len() - preview_count
+				)
+				.dimmed()
 			);
 		}
 	}

@@ -79,6 +79,7 @@ fn main() {
 			min_cluster_size,
 			min_samples,
 			use_umap,
+			preview_count,
 		} => commands::cluster::run(
 			&dir,
 			cli.recursive,
@@ -86,6 +87,7 @@ fn main() {
 			min_cluster_size,
 			min_samples,
 			use_umap,
+			preview_count,
 		),
 		cli::Command::Clean { dir } => commands::clean::run(&dir, cli.recursive),
 		cli::Command::Watch {
@@ -93,7 +95,13 @@ fn main() {
 			min_resolution,
 			max_size,
 			exclude_videos,
-		} => commands::watch::run(&dir, cli.recursive, min_resolution, max_size, exclude_videos),
+		} => commands::watch::run(
+			&dir,
+			cli.recursive,
+			min_resolution,
+			max_size,
+			exclude_videos,
+		),
 	};
 
 	if let Err(e) = result {
