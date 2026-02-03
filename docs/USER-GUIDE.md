@@ -87,6 +87,8 @@ scout search [QUERY] [OPTIONS]
 - `-o, --open` - Open first result
 - `--include-ref` - Include reference image in results
 - `--exclude-videos` - Exclude videos from results
+- `--paths` - Output only file paths (useful for scripting)
+- `--export <PATH>` - Export results as JSON to file (use '-' for stdout)
 
 **Examples:**
 
@@ -108,11 +110,38 @@ scout search "cat" -n 5 -s 0.3
 
 # Open top result
 scout search "mountain landscape" -o
+
+# Export results as JSON
+scout search "vacation 2023" --export results.json
+
+# Export to stdout and pipe to jq
+scout search "beach" --export - | jq '.results[].path'
+
+# Get only file paths for scripting
+scout search "portrait" --paths
+
+# Copy results to backup folder (Windows PowerShell)
+scout search "important documents" --paths | ForEach-Object { Copy-Item $_ "C:\Backup\" }
+
+# Copy results to backup folder (Linux/macOS)
+scout search "family photos" --paths | xargs -I {} cp {} /backup/family/
+
+# Move files matching criteria (Linux/macOS)
+scout search "blurry" --paths | xargs -I {} mv {} ./to_review/
+
+# Create symbolic links (Linux/macOS)
+scout search "favorites" --paths | xargs -I {} ln -s {} ~/Favorites/
+
+# Count matching files
+scout search "landscape" --paths | wc -l
+
+# Filter by score and copy (using jq)
+scout search "portrait" --export - | jq -r '.results[] | select(.score > 0.7) | .path' | xargs -I {} cp {} ./high_quality/
 ```
 
-### `cluster` - Group Images by Similarity
+### `cluster` - Group Media by Similarity
 
-Analyze your collection and group visually similar images together using HDBSCAN clustering.
+Analyze your collection and group visually similar media together using HDBSCAN clustering.
 
 ```bash
 scout cluster [OPTIONS]
@@ -121,9 +150,10 @@ scout cluster [OPTIONS]
 **Options:**
 - `-d, --dir <DIR>` - Directory to cluster (default: current)
 - `-f, --force` - Force reclustering (ignore cache)
-- `--min-cluster-size <N>` - Minimum images per cluster (default: 5)
+- `--min-cluster-size <N>` - Minimum media files per cluster (default: 5)
 - `--min-samples <N>` - Minimum samples for core points
 - `--use-umap` - Use UMAP dimensionality reduction (experimental)
+- `--export <PATH>` - Export cluster results as JSON to file (use '-' for stdout)
 
 **Examples:**
 
@@ -139,12 +169,50 @@ scout cluster -d ~/Photos --min-cluster-size 10
 
 # Recursive clustering
 scout -r cluster -d ~/Photos
+
+# Export clusters as JSON
+scout cluster -d ~/Photos --export clusters.json
+
+# Export to stdout and process with jq
+scout cluster --export - | jq '.clusters[0].members[]'
+
+# Organize files into cluster folders (Windows PowerShell)
+scout cluster --export clusters.json
+$data = Get-Content clusters.json | ConvertFrom-Json
+foreach ($cluster in $data.clusters) {
+    New-Item -ItemType Directory -Force -Path "Cluster_$($cluster.id)"
+    foreach ($file in $cluster.members) {
+        Copy-Item $file "Cluster_$($cluster.id)\"
+    }
+}
+
+# Organize files into cluster folders (Linux/macOS with jq)
+scout cluster --export - | jq -r '.clusters[] | @json' | while read cluster; do
+    id=$(echo $cluster | jq -r '.id')
+    mkdir -p "cluster_$id"
+    echo $cluster | jq -r '.members[]' | xargs -I {} cp {} "cluster_$id/"
+done
+
+# Extract only high-cohesion clusters
+scout cluster --export - | jq '.clusters[] | select(.cohesion > 0.8)'
+
+# Count files per cluster
+scout cluster --export - | jq '.clusters[] | {id, count: .members | length}'
+
+# Find representative files
+scout cluster --export - | jq -r '.clusters[] | "\(.id): \(.representative)"'
+
+# Copy representatives to a showcase folder (Linux/macOS)
+scout cluster --export - | jq -r '.clusters[].representative' | xargs -I {} cp {} ./showcase/
+
+# Identify noise (outlier files)
+scout cluster --export - | jq -r '.noise[]'
 ```
 
 **How it works:**
 1. Loads all embeddings from your indexed collection
-2. Groups similar images using HDBSCAN (density-based clustering)
-3. Computes representative image for each cluster
+2. Groups similar media using HDBSCAN (density-based clustering)
+3. Computes representative file for each cluster
 4. Calculates cohesion score (measures cluster tightness: 0-1)
 5. Caches results in `.scout/clusters.msgpack`
 6. Optional UMAP: Reduces 1024D embeddings to 512D for faster processing
@@ -152,40 +220,41 @@ scout -r cluster -d ~/Photos
 **Understanding the output:**
 
 ```
-✓ 19 clusters, 1384 images, 1180 noise (85.3%)
+✓ 19 clusters, 1384 media files, 1180 noise (85.3%)
 
-Cluster 0 (33 images, 86.7% cohesion)
+Cluster 0 (33 files, 86.7% cohesion)
   Representative: DA1AWQTKC46JM8D9SF9GJ7MSZ0.jpeg
   [1] FK30SDJAMW44KAPK34JS01JSLQ.jpeg
   [2] 1Q2ASFXAVAT0FAEMQ60F4SZMT0.jpeg
   ... and 31 more
 
-Noise (1180 images)
+Noise (1180 files)
   Image00595_b.png
   ...
 ```
 
-- **Clusters**: Groups of similar images
-- **Noise**: Images too different from any cluster (similarity outliers)
-- **Cohesion**: How similar images within the cluster are (higher = better)
-- **Representative**: Best example image for the cluster
+- **Clusters**: Groups of visually similar media
+- **Noise**: Files too different from any cluster (similarity outliers)
+- **Cohesion**: How similar items within the cluster are (higher = better)
+- **Representative**: Best example file for the cluster
 
 **UMAP Dimensionality Reduction (experimental):**
-- Automatically applied when clustering > 50 images with `--use-umap`
+- Automatically applied when clustering > 50 files with `--use-umap`
 - Reduces dimensions from 1024D to 512D
 - Makes clustering faster for large collections
 - Trade-off: May lose some fine-grained similarity distinctions
-- Useful for: Very large collections (10,000+ images)
+- Useful for: Very large collections (10,000+ files)
 
 **Use cases:**
-- **Discovery:** Explore how images naturally group together
-- **Duplicate detection:** Find near-duplicate or similar photos
+- **Discovery:** Explore how media naturally groups together
+- **Duplicate detection:** Find near-duplicate or similar content
 - **Organization:** Identify groups that could be organized into folders
-- **Cleanup:** Find outlier noise images that stand out
+- **Cleanup:** Find outlier noise files that don't fit anywhere
 - **Manual organization:** Use clusters as a guide for manual folder structure
+- **Automation:** Export clusters and use scripts to organize files automatically
 
 **Performance notes:**
-- First clustering: Depends on collection size (minutes for 10K+ images with GPU)
+- First clustering: Depends on collection size (minutes for 10K+ files with GPU)
 - Cached clustering: Instant reload from disk
 - Clear cache with `--force` to force reclustering
 - No central database: Uses sidecars you already have

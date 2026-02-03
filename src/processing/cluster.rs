@@ -1,4 +1,4 @@
-//! HDBSCAN clustering for image embeddings
+//! HDBSCAN clustering for media embeddings
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -21,7 +21,7 @@ pub fn cluster_embeddings(
 		anyhow::bail!("No embeddings found to cluster");
 	}
 
-	ui::info(&format!("Clustering {} images", sidecars.len()));
+	ui::info(&format!("Clustering {} media files", sidecars.len()));
 
 	// Extract embeddings and build lookup maps
 	ui::debug("Extracting embeddings...");
@@ -119,7 +119,7 @@ pub fn cluster_embeddings(
 	Ok(db)
 }
 
-/// Find the most representative image in a cluster (closest to centroid)
+/// Find the most representative file in a cluster (closest to centroid)
 fn find_representative(
 	hashes: &[String],
 	sidecars: &[(PathBuf, Sidecar)],

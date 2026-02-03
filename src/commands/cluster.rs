@@ -1,4 +1,4 @@
-//! Cluster command - group images by visual similarity
+//! Cluster command - group media by visual similarity
 
 use std::collections::HashMap;
 use std::fs;

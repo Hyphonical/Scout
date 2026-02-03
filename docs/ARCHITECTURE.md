@@ -415,7 +415,7 @@ pub fn cluster_embeddings(
 8. Return `ClusterDatabase` with results
 
 **Key functions:**
-- `find_representative()` - Finds image closest to cluster centroid
+- `find_representative()` - Finds file closest to cluster centroid
 - `compute_cohesion()` - Calculates average pairwise similarity within cluster
 - `compute_centroid()` - Computes mean embedding of cluster
 
@@ -427,12 +427,12 @@ pub struct ClusterDatabase {
     pub params: ClusterParams,
     pub clusters: Vec<Cluster>,
     pub noise: Vec<String>,  // Outlier hashes
-    pub total_images: usize,
+    pub total_files: usize,
 }
 
 pub struct Cluster {
     pub id: usize,
-    pub image_hashes: Vec<String>,
+    pub file_hashes: Vec<String>,
     pub representative_hash: String,
     pub cohesion: f32,  // 0.0-1.0
 }
@@ -509,22 +509,25 @@ pub fn reduce_embeddings(
 6. Sort by score (descending)
 7. Filter reference image (unless --include-ref)
 8. Truncate to limit
-9. Display results with timestamps (for videos)
+9. Export as JSON (if --export flag)
+10. Output paths only (if --paths flag)
+11. Display results with timestamps (for videos)
 
 #### `cluster.rs`
 
-**Purpose:** Group images by visual similarity
+**Purpose:** Group media by visual similarity
 
 **Flow:**
 1. Load all embeddings from sidecars
 2. Optional: Reduce dimensions with UMAP (512D)
 3. Run HDBSCAN clustering algorithm
 4. Compute cluster metrics:
-   - Find representative image (closest to centroid)
+   - Find representative file (closest to centroid)
    - Calculate cohesion score (average pairwise similarity)
 5. Sort clusters by size (largest first)
 6. Cache results to `.scout/clusters.msgpack`
-7. Display cluster summary with examples
+7. Export as JSON (if --export flag)
+8. Display cluster summary with examples
 
 **UMAP Integration:**
 - Triggers when dataset > 50 images and `--use-umap` flag
@@ -538,7 +541,7 @@ pub fn reduce_embeddings(
 - Robust to noise: marks outliers as noise points
 - Works directly on high-dimensional embeddings
 - Parameters:
-  - `min_cluster_size`: Minimum images per cluster (default: 5)
+  - `min_cluster_size`: Minimum files per cluster (default: 5)
   - `min_samples`: Minimum samples for core points (optional)
 
 **Clustering Pipeline:**

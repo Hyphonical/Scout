@@ -1,4 +1,4 @@
-//! Search command - find similar images
+//! Search command - find similar media
 
 use anyhow::{anyhow, Result};
 use colored::*;

@@ -38,7 +38,7 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Command {
-	/// Index images in a directory
+	/// Index media files in a directory
 	Scan {
 		#[arg(short, long, default_value = ".")]
 		dir: PathBuf,
@@ -56,7 +56,7 @@ pub enum Command {
 		exclude_videos: bool,
 	},
 
-	/// Search indexed images
+	/// Search indexed media
 	Search {
 		/// Search query text (optional if using --image)
 		query: Option<String>,
@@ -100,7 +100,7 @@ pub enum Command {
 		export: Option<PathBuf>,
 	},
 
-	/// Cluster images by visual similarity
+	/// Cluster media by visual similarity
 	Cluster {
 		#[arg(short, long, default_value = ".")]
 		dir: PathBuf,

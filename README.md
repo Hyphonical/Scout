@@ -12,9 +12,9 @@ Find images and videos by what's _in_ them, not what you named the file. No clou
 - [Quick Start](#quick-start-)
 - [Documentation](#documentation-)
 - [Usage](#usage)
-  - [`scan` - Index Images](#scan---index-images)
-  - [`search` - Find Images](#search---find-images)
-  - [`cluster` - Group Images by Similarity](#cluster---group-images-by-similarity)
+  - [`scan` - Index Media](#scan---index-media)
+  - [`search` - Find Media](#search---find-media)
+  - [`cluster` - Group Media by Similarity](#cluster---group-media-by-similarity)
   - [`clean` - Remove Orphaned Sidecars](#clean---remove-orphaned-sidecars)
   - [`watch` - Auto-Index New Files](#watch---auto-index-new-files)
   - [Global Options](#global-options)
@@ -42,23 +42,25 @@ So if you're the kind of person who has 10,000+ photos scattered across folders 
 
 ## Features 🎯
 
-- **📝 Text-based search**: Find images by natural language descriptions
+- **📝 Text-based search**: Find media by natural language descriptions
 - **🖼️ Image-based search**: Reverse image search using a reference photo
 - **🔀 Hybrid search**: Combine text + image queries with adjustable weighting
-- **✨ HDBSCAN clustering**: Group images by visual similarity with optional dimensionality reduction
+- **✨ HDBSCAN clustering**: Group media by visual similarity with optional dimensionality reduction
 - **🚫 Negative prompts**: Exclude unwanted content with `--not` flag
 - **🎬 Video support**: Index video files by extracting key frames (requires FFmpeg)
 - **📁 Recursive scanning**: Index entire directory trees in one go
 - **⚙️ Smart filtering**: Exclude videos, set minimum resolution, file size limits
 - **🔧 Custom model paths**: Specify custom ONNX models via CLI or environment
 - **🚀 Multiple backends**: Auto-detects best hardware (CUDA, TensorRT, CoreML, XNNPACK, or CPU)
-- **💾 Sidecar storage**: Embeddings stored alongside images, no central database
+- **💾 Sidecar storage**: Embeddings stored alongside media, no central database
 - **🔒 Offline everything**: No internet required after initial model download
-- **⚡ Fast**: Optimized inference (~50-200ms per image depending on hardware)
+- **⚡ Fast**: Optimized inference (~50-200ms per file depending on hardware)
 - **🌐 Cross platform**: Works on Linux, macOS, Windows
-- **📦 Portability**: Move/copy images and `.scout/` sidecars travel with them
+- **📦 Portability**: Move/copy files and `.scout/` sidecars travel with them
 - **👁️ Watch mode**: Monitor directories and auto-index new files as they arrive
 - **🏷️ Rename immunity**: Files identified by content hash, not filename - rename freely!
+- **📤 Export support**: Export search and cluster results as JSON for scripting
+- **🔗 Path output**: Output file paths directly for shell pipelines and automation
 
 ## Demo
 
@@ -113,7 +115,7 @@ scout cluster -d ~/Photos
 
 ## Usage
 
-### `scan` - Index images
+### `scan` - Index media
 
 ```bash
 scout scan [OPTIONS]
@@ -139,7 +141,7 @@ scout scan -d ./photos -r --exclude-videos
 scout scan -d ./photos -r --min-resolution 512 --max-size 50
 ```
 
-### `search` - Find images
+### `search` - Find media
 
 ```bash
 scout search [QUERY] [OPTIONS]
@@ -154,6 +156,8 @@ Options:
   --include-ref                 Include reference image in results
   -o, --open                    Open first result
   --exclude-videos              Exclude videos from results
+  --paths                       Output only file paths (useful for scripting)
+  --export <PATH>               Export results as JSON to file (use '-' for stdout)
 ```
 
 **Examples:**
@@ -173,9 +177,28 @@ scout search "woman on beach" --not "dog with frisbee"
 
 # Open first result
 scout search "sunset" -o
+
+# Export results as JSON
+scout search "mountains" --export results.json
+
+# Export to stdout (pipe to jq for processing)
+scout search "sunset" --export - | jq '.results[].path'
+
+# Get only file paths (for copying, moving, etc.)
+scout search "cat" --paths
+
+# Copy search results to a new folder (Windows)
+scout search "vacation 2024" --paths > files.txt
+foreach ($file in Get-Content files.txt) { Copy-Item $file "C:\Vacation2024\" }
+
+# Copy search results to a new folder (Linux/macOS)
+scout search "vacation 2024" --paths | xargs -I {} cp {} /path/to/backup/
+
+# Move low-scoring duplicates (using jq to filter)
+scout search "landscape" --export - | jq -r '.results[] | select(.score < 0.5) | .path' | xargs -I {} mv {} ./low_quality/
 ```
 
-### `cluster` - Group images by visual similarity
+### `cluster` - Group media by visual similarity
 
 ```bash
 scout cluster [OPTIONS]
@@ -183,9 +206,10 @@ scout cluster [OPTIONS]
 Options:
   -d, --dir <PATH>              Directory to cluster [default: .]
   -f, --force                   Force reclustering (ignore cache)
-  --min-cluster-size <N>        Minimum images per cluster [default: 5]
+  --min-cluster-size <N>        Minimum media files per cluster [default: 5]
   --min-samples <N>             Minimum samples for core points
   --use-umap                    Use UMAP for dimensionality reduction (experimental)
+  --export <PATH>               Export cluster results as JSON (use '-' for stdout)
 ```
 
 **Examples:**
@@ -197,26 +221,54 @@ scout cluster -d ~/Photos
 # Force reclustering
 scout cluster -d ~/Photos -f
 
-# Export similar images to organized folders
+# With UMAP for large collections
 scout cluster -d ~/Photos --use-umap
 
 # Stricter clustering (larger clusters)
 scout cluster -d ~/Photos --min-cluster-size 10
+
+# Export clusters as JSON
+scout cluster -d ~/Photos --export clusters.json
+
+# Export to stdout and process with jq
+scout cluster -d ~/Photos --export - | jq '.clusters[0].members[]'
+
+# Organize files by cluster (Windows PowerShell)
+scout cluster --export clusters.json
+$data = Get-Content clusters.json | ConvertFrom-Json
+foreach ($cluster in $data.clusters) {
+    New-Item -ItemType Directory -Force -Path "Cluster_$($cluster.id)"
+    foreach ($file in $cluster.members) {
+        Copy-Item $file "Cluster_$($cluster.id)\"
+    }
+}
+
+# Organize files by cluster (Linux/macOS with jq)
+scout cluster --export - | jq -r '.clusters[] | "mkdir -p cluster_\(.id) && echo \(.members[]) | xargs -I {} cp {} cluster_\(.id)/"' | sh
+
+# Extract only high-cohesion clusters
+scout cluster --export - | jq '.clusters[] | select(.cohesion > 0.8)'
+
+# Count files per cluster
+scout cluster --export - | jq '.clusters[] | {id, count: .members | length}'
+
+# Find the representative file for each cluster
+scout cluster --export - | jq -r '.clusters[] | "\(.id): \(.representative)"'
 ```
 
 **How it works:**
-- Computes embeddings for all images in the collection
-- Groups similar images using HDBSCAN algorithm
-- Displays representative image for each cluster
-- Shows cluster cohesion score (how similar images in the cluster are)
+- Computes embeddings for all media in the collection
+- Groups visually similar content using HDBSCAN algorithm
+- Displays representative file for each cluster
+- Shows cluster cohesion score (how similar items in the cluster are)
 - Optional UMAP dimensionality reduction (512D) for large datasets
 - Results cached in `.scout/clusters.msgpack` (regenerate with `--force`)
 
 **Example output:**
 ```
-✓ 19 clusters, 1384 images, 1180 noise (85.3%)
+✓ 19 clusters, 1384 media files, 1180 noise (85.3%)
 
-Cluster 0 (33 images, 86.7% cohesion)
+Cluster 0 (33 files, 86.7% cohesion)
   Representative: DA1AWQTKC46JM8D9SF9GJ7MSZ0.jpeg
   [1] FK30SDJAMW44KAPK34JS01JSLQ.jpeg
   [2] 1Q2ASFXAVAT0FAEMQ60F4SZMT0.jpeg
@@ -308,6 +360,7 @@ Override with `--provider <type>` if needed. Use `--verbose` to see which provid
 2. **Storage**: Embeddings saved as `.msgpack` files in `.scout/` folders (see [docs/SIDECAR.md](docs/SIDECAR.md))
 3. **Searching**: Query converted to embedding, compared via cosine similarity
 4. **Ranking**: Results sorted by similarity score (dot product of normalized vectors)
+5. **Export**: Results can be exported as JSON for further processing and automation
 
 Models are quantized to Q4F16 (4-bit weights, FP16 activations) for speed/size/accuracy balance.
 

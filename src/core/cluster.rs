@@ -2,14 +2,14 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Represents a single cluster of similar images
+/// Represents a single cluster of visually similar media
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Cluster {
-	/// Unique cluster ID (0-indexed, sorted by size)
+	/// Cluster ID (assigned after sorting by size)
 	pub id: usize,
-	/// File hashes of images in this cluster
+	/// File hashes of media in this cluster
 	pub image_hashes: Vec<String>,
-	/// Hash of the most representative image (closest to centroid)
+	/// Hash of the most representative file (closest to centroid)
 	pub representative_hash: String,
 	/// Average similarity within cluster (0.0-1.0)
 	pub cohesion: f32,
