@@ -14,7 +14,7 @@ Find images and videos by what's _in_ them, not what you named the file. No clou
 - [Usage](#usage)
   - [`scan` - Index Media](#scan---index-media)
   - [`search` - Find Media](#search---find-media)
-  - [`cluster` - Group Media by Similarity](#cluster---group-media-by-similarity)
+  - [`cluster` - Group Media by Visual Similarity](#cluster---group-media-by-visual-similarity)
   - [`clean` - Remove Orphaned Sidecars](#clean---remove-orphaned-sidecars)
   - [`watch` - Auto-Index New Files](#watch---auto-index-new-files)
   - [Global Options](#global-options)
@@ -186,7 +186,11 @@ scout search "sunset" --export - | jq '.results[].path'
 
 # Get only file paths (for copying, moving, etc.)
 scout search "cat" --paths
+```
+> [!TIP]
+> For best search results, write descriptive captions instead of single keywords. See [SEARCH_TIPS.md](docs/SEARCH_TIPS.md) for detailed guidance on crafting effective queries.
 
+```bash
 # Copy search results to a new folder (Windows)
 scout search "vacation 2024" --paths > files.txt
 foreach ($file in Get-Content files.txt) { Copy-Item $file "C:\Vacation2024\" }
@@ -352,7 +356,8 @@ Scout auto-detects the best execution provider for your hardware:
 | **XNNPACK** | ARM/x64 CPUs | Moderate (200-400ms/image) |
 | **CPU** | Fallback | Slower (500-1000ms/image) |
 
-Override with `--provider <type>` if needed. Use `--verbose` to see which provider is active.
+> [!TIP]
+> Override with `--provider <type>` if needed. Use `--verbose` to see which provider is active.
 
 ## How It Works 🧠
 
@@ -363,6 +368,19 @@ Override with `--provider <type>` if needed. Use `--verbose` to see which provid
 5. **Export**: Results can be exported as JSON for further processing and automation
 
 Models are quantized to Q4F16 (4-bit weights, FP16 activations) for speed/size/accuracy balance.
+
+> [!CAUTION]
+> ⚠️ Disclaimer
+>
+> **Scout uses AI models for semantic understanding.** While the technology is powerful, it can produce incorrect or unexpected results. Please be aware:
+> 
+> - **Always verify search results** before making decisions based on them
+> - **Double-check piped commands** and automated workflows, don't blindly pipe results to destructive operations like `rm` or `mv`
+> - **Scout does not modify or delete media files**, it only reads them to generate embeddings. However, *you* are responsible for how you use the results
+> - **Check the documentation** in [docs/](docs/) before reporting issues
+> - **Test scripts on small datasets first** before running them on your entire media library
+> 
+> Scout is a semantic search tool, not a guarantee. Use it responsibly.
 
 ## Contributing
 
