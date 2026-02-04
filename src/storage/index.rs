@@ -50,15 +50,20 @@ pub fn load_all_sidecars(
 
 	let mut results = Vec::with_capacity(sidecar_paths.len());
 
-	for (sidecar_path, _media_dir) in sidecar_paths {
-		if let Ok(sidecar) = super::sidecar::load(&sidecar_path) {
-			let hash = sidecar.hash();
-
-			if let Some(media_path) = hash_cache.get(hash) {
-				results.push((media_path.clone(), sidecar));
+	let loaded_sidecars: Vec<(PathBuf, Sidecar)> = sidecar_paths
+		.par_iter()
+		.filter_map(|(sidecar_path, _media_dir)| {
+			if let Ok(sidecar) = super::sidecar::load(sidecar_path) {
+				let hash = sidecar.hash();
+				if let Some(media_path) = hash_cache.get(hash) {
+					return Some((media_path.clone(), sidecar));
+				}
 			}
-		}
-	}
+			None
+		})
+		.collect();
+
+	results.extend(loaded_sidecars);
 
 	(results, hash_cache)
 }

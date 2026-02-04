@@ -39,7 +39,10 @@ pub fn run(
 	force: bool,
 	min_cluster_size: usize,
 	min_samples: Option<usize>,
+	cohesion_threshold: f32,
 	use_umap: bool,
+	umap_neighbors: usize,
+	umap_components: usize,
 	preview_count: usize,
 	export: Option<&Path>,
 ) -> Result<()> {
@@ -47,16 +50,50 @@ pub fn run(
 
 	let start = Instant::now();
 
-	ui::debug(&format!(
-		"Starting clustering: dir={}, recursive={}, force={}",
-		dir.display(),
-		recursive,
-		force
-	));
+	// Build list of non-default parameters for logging
+	let mut param_strs = Vec::new();
+	param_strs.push(format!("dir={}", dir.display()));
+	param_strs.push(format!("recursive={}", recursive));
+	param_strs.push(format!("force={}", force));
+	
+	if min_cluster_size != crate::config::DEFAULT_MIN_CLUSTER_SIZE {
+		param_strs.push(format!("min_cluster_size={}", min_cluster_size));
+	}
+	if min_samples.is_some() {
+		param_strs.push(format!("min_samples={}", min_samples.unwrap()));
+	}
+	if (cohesion_threshold - crate::config::DEFAULT_COHESION_THRESHOLD).abs() > 0.001 {
+		param_strs.push(format!("threshold={:.2}", cohesion_threshold));
+	}
+	if use_umap {
+		param_strs.push("use_umap=true".to_string());
+		if umap_neighbors != crate::config::DEFAULT_UMAP_NEIGHBORS {
+			param_strs.push(format!("umap_neighbors={}", umap_neighbors));
+		}
+		if umap_components != crate::config::DEFAULT_UMAP_COMPONENTS {
+			param_strs.push(format!("umap_components={}", umap_components));
+		}
+	}
+
+	ui::debug(&format!("Starting clustering: {}", param_strs.join(", ")));
+
+	// Create params for this run
+	let params = ClusterParams {
+		min_cluster_size,
+		min_samples,
+		cohesion_threshold,
+		use_umap,
+		umap_neighbors,
+		umap_components,
+	};
 
 	// Check for cached clusters
 	if !force {
 		if let Some(cached_db) = load_cached_clusters(&clusters_path) {
+			// Check if parameters match
+			if cached_db.params != params {
+				ui::debug("Cached parameters don't match, reclustering...");
+			} else {
 			ui::debug(&format!(
 				"Found cached clusters: {} clusters, {} images",
 				cached_db.clusters.len(),
@@ -81,6 +118,7 @@ pub fn run(
 
 			ui::debug(&format!("{}", "Run with --force to recluster".dimmed()));
 			return Ok(());
+			}
 		}
 	} else {
 		ui::debug("Force flag set, skipping cache check");
@@ -107,12 +145,7 @@ pub fn run(
 		ui::debug(&format!("Embedding dimension: {}D", emb.0.len()));
 	}
 
-	let params = ClusterParams {
-		min_cluster_size,
-		min_samples,
-	};
-
-	let cluster_db = cluster_embeddings(sidecars, params, use_umap)?;
+	let cluster_db = cluster_embeddings(sidecars, params, use_umap, umap_neighbors, umap_components)?;
 
 	// Log clustering results
 	ui::debug(&format!(

@@ -16,6 +16,8 @@ pub fn cluster_embeddings(
 	sidecars: Vec<(PathBuf, Sidecar)>,
 	params: ClusterParams,
 	use_umap: bool,
+	umap_neighbors: usize,
+	umap_components: usize,
 ) -> Result<ClusterDatabase> {
 	if sidecars.is_empty() {
 		anyhow::bail!("No embeddings found to cluster");
@@ -44,7 +46,7 @@ pub fn cluster_embeddings(
 			"Dataset size ({}) > 50, applying UMAP",
 			sidecars.len()
 		));
-		crate::processing::umap::reduce_embeddings(&embeddings, 512, 15)?
+		crate::processing::umap::reduce_embeddings(&embeddings, umap_components, umap_neighbors)?
 	} else {
 		if use_umap {
 			ui::debug("Dataset too small for UMAP (<50), using raw embeddings");
@@ -107,11 +109,44 @@ pub fn cluster_embeddings(
 		cluster.id = new_id;
 	}
 
+	// Filter clusters by cohesion threshold
+	let threshold = params.cohesion_threshold;
+	let mut filtered_clusters = Vec::new();
+	let mut low_cohesion_count = 0;
+
+	for cluster in clusters {
+		if cluster.cohesion >= threshold {
+			filtered_clusters.push(cluster);
+		} else {
+			ui::debug(&format!(
+				"Cluster {} filtered: cohesion {:.1}% < threshold {:.1}%, adding {} images to noise",
+				cluster.id,
+				cluster.cohesion * 100.0,
+				threshold * 100.0,
+				cluster.image_hashes.len()
+			));
+			noise_hashes.extend(cluster.image_hashes);
+			low_cohesion_count += 1;
+		}
+	}
+
+	if low_cohesion_count > 0 {
+		ui::debug(&format!(
+			"Filtered {} low-cohesion clusters to noise",
+			low_cohesion_count
+		));
+	}
+
+	// Re-assign IDs after filtering
+	for (new_id, cluster) in filtered_clusters.iter_mut().enumerate() {
+		cluster.id = new_id;
+	}
+
 	let db = ClusterDatabase {
 		version: env!("CARGO_PKG_VERSION").to_string(),
 		timestamp: chrono::Utc::now().to_rfc3339(),
 		params,
-		clusters,
+		clusters: filtered_clusters,
 		noise: noise_hashes,
 		total_images: sidecars.len(),
 	};

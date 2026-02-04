@@ -114,17 +114,26 @@ pub enum Command {
 		#[arg(short, long, help = "Force reclustering even if cached")]
 		force: bool,
 
-		#[arg(long, default_value_t = 5, help = "Minimum images per cluster")]
+		#[arg(long, default_value_t = crate::config::DEFAULT_MIN_CLUSTER_SIZE, help = "Minimum images per cluster")]
 		min_cluster_size: usize,
 
 		#[arg(long, help = "Minimum samples for core points")]
 		min_samples: Option<usize>,
+
+		#[arg(long, default_value_t = crate::config::DEFAULT_COHESION_THRESHOLD, help = "Minimum cohesion threshold (0.0-1.0)")]
+		threshold: f32,
 
 		#[arg(
 			long,
 			help = "Use UMAP dimensionality reduction (faster for large datasets)"
 		)]
 		use_umap: bool,
+
+		#[arg(long, default_value_t = crate::config::DEFAULT_UMAP_NEIGHBORS, help = "UMAP n_neighbors parameter")]
+		umap_neighbors: usize,
+
+		#[arg(long, default_value_t = crate::config::DEFAULT_UMAP_COMPONENTS, help = "UMAP n_components (target dimensions)")]
+		umap_components: usize,
 
 		#[arg(
 			short = 'p',

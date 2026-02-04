@@ -398,6 +398,5 @@ gdb ./target/debug/scout
 
 - Open an issue for bugs or feature requests
 - Start a discussion for questions or ideas
-- Join the community (Discord/Slack/etc.)
 
 Thank you for contributing! 🎉

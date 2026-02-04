@@ -112,6 +112,8 @@ Scout is a semantic search engine for images and videos. It works in two phases:
 - `SIDECAR_DIR`, `SIDECAR_EXT` - Storage settings
 - `IMAGE_EXTENSIONS`, `VIDEO_EXTENSIONS` - Supported formats
 - `DEFAULT_LIMIT`, `DEFAULT_MIN_SCORE` - Search defaults
+- `DEFAULT_MIN_CLUSTER_SIZE`, `DEFAULT_COHESION_THRESHOLD` - Cluster defaults
+- `DEFAULT_UMAP_NEIGHBORS`, `DEFAULT_UMAP_COMPONENTS` - UMAP defaults
 
 **Dynamic configuration:**
 - `models_dir()` - Resolve model directory (env var, custom, default)
@@ -297,6 +299,15 @@ pub enum Sidecar {
     Image(ImageSidecar),
     Video(VideoSidecar),
 }
+
+pub struct ClusterParams {
+    pub min_cluster_size: usize,
+    pub min_samples: Option<usize>,
+    pub cohesion_threshold: f32,
+    pub use_umap: bool,
+    pub umap_neighbors: usize,
+    pub umap_components: usize,
+}
 ```
 
 **Operations:**
@@ -461,9 +472,9 @@ pub fn reduce_embeddings(
 **Features:**
 - **Brute-force KNN**: Accurate but slower; suitable for < 50K points
 - **Random initialization**: Centered at origin, well-dispersed
-- **Default parameters:**
-  - `n_components`: 512 (try 256-1024 for different speed/quality tradeoffs)
-  - `n_neighbors`: 15 (balance between local and global structure)
+- **Configurable parameters:**
+  - `n_components`: Target dimensions (default: 64, try 16-512 for different speed/quality tradeoffs)
+  - `n_neighbors`: Balance between local and global structure (default: 50)
 
 **Output:**
 - Vector of length `n_samples` containing `n_components`-dimensional embeddings
@@ -518,21 +529,40 @@ pub fn reduce_embeddings(
 **Purpose:** Group media by visual similarity
 
 **Flow:**
-1. Load all embeddings from sidecars
-2. Optional: Reduce dimensions with UMAP (512D)
-3. Run HDBSCAN clustering algorithm
-4. Compute cluster metrics:
+1. Check for cached clusters with parameter validation
+2. Load all embeddings from sidecars
+3. Optional: Reduce dimensions with UMAP (configurable)
+4. Run HDBSCAN clustering algorithm
+5. Compute cluster metrics:
    - Find representative file (closest to centroid)
    - Calculate cohesion score (average pairwise similarity)
-5. Sort clusters by size (largest first)
-6. Cache results to `.scout/clusters.msgpack`
-7. Export as JSON (if --export flag)
-8. Display cluster summary with examples
+6. Filter clusters by cohesion threshold
+7. Sort clusters by size (largest first)
+8. Cache results to `.scout/clusters.msgpack`
+9. Export as JSON (if --export flag)
+10. Display cluster summary with examples
+
+**Cache Validation:**
+- Cached clusters are only used if all parameters match:
+  - `min_cluster_size`
+  - `min_samples`
+  - `cohesion_threshold`
+  - `use_umap`
+  - `umap_neighbors`
+  - `umap_components`
+- Any parameter change invalidates cache and triggers reclustering
+
+**Cohesion Threshold:**
+- Filters out low-quality clusters (default: 0.70 / 70%)
+- Clusters below threshold are moved to "Noise"
+- Debug logging shows filtered clusters and reason
+- Helps eliminate spurious groupings
 
 **UMAP Integration:**
 - Triggers when dataset > 50 images and `--use-umap` flag
-- Reduces 1024D → 512D to balance speed vs. quality
-- Uses k=15 nearest neighbors for graph construction
+- Configurable dimensions (default: 64D, previously 512D)
+- Configurable neighbors (default: 50, previously 15)
+- Uses k-nearest neighbors for graph construction
 - Brute-force KNN computation (accurate for high dimensions)
 - Experimental feature for large collections
 
@@ -543,12 +573,13 @@ pub fn reduce_embeddings(
 - Parameters:
   - `min_cluster_size`: Minimum files per cluster (default: 5)
   - `min_samples`: Minimum samples for core points (optional)
+  - `cohesion_threshold`: Minimum avg similarity (default: 0.70)
 
 **Clustering Pipeline:**
 ```
 Embeddings (1024D)
     │
-    ├─> Optional UMAP (512D) ──> Reduced embeddings
+    ├─> Optional UMAP (64D) ──> Reduced embeddings
     │
     └─────────────────────────> HDBSCAN Clustering
                                     │
@@ -557,6 +588,9 @@ Embeddings (1024D)
                                     │
                                     v
                         Compute metrics (cohesion, representative)
+                                    │
+                                    v
+                        Filter by cohesion threshold
                                     │
                                     v
                             Sort and save results
@@ -928,11 +962,19 @@ If requested provider unavailable:
 **Search:**
 - Pre-computed embeddings (no re-encoding)
 - Fast similarity (dot product)
+- Parallel similarity computation (rayon)
 
 **Storage:**
 - MessagePack (compact, fast)
 - Sidecars (no database overhead)
 - Per-directory (locality)
+- Parallel sidecar loading (rayon)
+
+**Clustering:**
+- Cache results with parameter validation
+- Optional UMAP dimensionality reduction
+- Cohesion threshold filtering
+- Parallel cluster metric computation (rayon)
 
 ### Scaling
 

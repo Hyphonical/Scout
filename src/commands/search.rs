@@ -2,6 +2,7 @@
 
 use anyhow::{anyhow, Result};
 use colored::*;
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -98,67 +99,72 @@ pub fn run(
 
 	ui::success(&format!("Loaded {} embeddings", sidecars.len()));
 
-	let mut matches = Vec::new();
+	let matches: Vec<Match> = sidecars
+		.into_par_iter()
+		.filter_map(|(_path, sidecar)| {
+			let hash = sidecar.hash().to_string();
 
-	for (_path, sidecar) in sidecars {
-		let hash = sidecar.hash().to_string();
-
-		match sidecar {
-			storage::Sidecar::Image(img) => {
-				let mut score = query_emb.similarity(&img.embedding());
-
-				if let Some(ref neg_emb) = negative_emb {
-					let neg_score = neg_emb.similarity(&img.embedding());
-					score -= neg_score * NEGATIVE_WEIGHT;
-				}
-
-				if score >= min_score {
-					if let Some(image_path) = hash_cache.get(&hash) {
-						matches.push(Match {
-							path: image_path.to_string_lossy().to_string(),
-							score,
-							timestamp: None,
-							hash: Some(hash.clone()),
-						});
-					}
-				}
-			}
-			storage::Sidecar::Video(vid) => {
-				if exclude_videos {
-					continue;
-				}
-
-				// Find best frame
-				let mut best_score = 0.0;
-				let mut best_timestamp = 0.0;
-
-				for (timestamp, frame_emb) in vid.frames() {
-					let mut score = query_emb.similarity(&frame_emb);
+			match sidecar {
+				storage::Sidecar::Image(img) => {
+					let mut score = query_emb.similarity(&img.embedding());
 
 					if let Some(ref neg_emb) = negative_emb {
-						let neg_score = neg_emb.similarity(&frame_emb);
+						let neg_score = neg_emb.similarity(&img.embedding());
 						score -= neg_score * NEGATIVE_WEIGHT;
 					}
 
-					if score > best_score {
-						best_score = score;
-						best_timestamp = timestamp;
+					if score >= min_score {
+						if let Some(image_path) = hash_cache.get(&hash) {
+							return Some(Match {
+								path: image_path.to_string_lossy().to_string(),
+								score,
+								timestamp: None,
+								hash: Some(hash.clone()),
+							});
+						}
 					}
+					None
 				}
-
-				if best_score >= min_score {
-					if let Some(video_path) = hash_cache.get(&hash) {
-						matches.push(Match {
-							path: video_path.to_string_lossy().to_string(),
-							score: best_score, // Clamp back to 0.0 for display
-							timestamp: Some(best_timestamp),
-							hash: Some(hash.clone()),
-						});
+				storage::Sidecar::Video(vid) => {
+					if exclude_videos {
+						return None;
 					}
+
+					// Find best frame
+					let mut best_score = 0.0;
+					let mut best_timestamp = 0.0;
+
+					for (timestamp, frame_emb) in vid.frames() {
+						let mut score = query_emb.similarity(&frame_emb);
+
+						if let Some(ref neg_emb) = negative_emb {
+							let neg_score = neg_emb.similarity(&frame_emb);
+							score -= neg_score * NEGATIVE_WEIGHT;
+						}
+
+						if score > best_score {
+							best_score = score;
+							best_timestamp = timestamp;
+						}
+					}
+
+					if best_score >= min_score {
+						if let Some(video_path) = hash_cache.get(&hash) {
+							return Some(Match {
+								path: video_path.to_string_lossy().to_string(),
+								score: best_score,
+								timestamp: Some(best_timestamp),
+								hash: Some(hash.clone()),
+							});
+						}
+					}
+					None
 				}
 			}
-		}
-	}
+		})
+		.collect();
+
+	let mut matches = matches;
 
 	// Filter out reference image if not including it
 	if !include_ref {

@@ -32,10 +32,14 @@ pub struct ClusterDatabase {
 	pub total_images: usize,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ClusterParams {
 	pub min_cluster_size: usize,
 	pub min_samples: Option<usize>,
+	pub cohesion_threshold: f32,
+	pub use_umap: bool,
+	pub umap_neighbors: usize,
+	pub umap_components: usize,
 }
 
 impl ClusterDatabase {

@@ -78,6 +78,9 @@ cargo build --release
 
 Binary at `target/release/scout` (or `scout.exe` on Windows).
 
+> [!NOTE]
+> Alternatively, download prebuilt binaries from the [Actions tab](https://github.com/Hyphonical/Scout/actions).
+
 ### 2. Get Models
 
 Download three model files into `models/` directory:
@@ -360,11 +363,11 @@ Scout auto-detects the best execution provider for your hardware:
 
 | Provider | Hardware | Performance |
 |----------|----------|-------------|
-| **TensorRT** | NVIDIA GPUs (RTX series) | Fastest (50-100ms/image) |
-| **CUDA** | NVIDIA GPUs | Very fast (80-150ms/image) |
-| **CoreML** | Apple Silicon (M1/M2/M3) | Very fast (80-150ms/image) |
-| **XNNPACK** | ARM/x64 CPUs | Moderate (200-400ms/image) |
-| **CPU** | Fallback | Slower (500-1000ms/image) |
+| **TensorRT** | NVIDIA GPUs (RTX series) | Fastest (50-100ms/image)   |
+| **CUDA**     | NVIDIA GPUs              | Very fast (80-150ms/image) |
+| **CoreML**   | Apple Silicon (M1/M2/M3) | Very fast (80-150ms/image) |
+| **XNNPACK**  | ARM/x64 CPUs             | Moderate (200-400ms/image) |
+| **CPU**      | Fallback                 | Slower (500-1000ms/image)  |
 
 > [!TIP]
 > Override with `--provider <type>` if needed. Use `--verbose` to see which provider is active.
@@ -394,7 +397,7 @@ Models are quantized to Q4F16 (4-bit weights, FP16 activations) for speed/size/a
 
 ## Contributing
 
-PRs welcome! See [docs/contributing.md](docs/contributing.md) for developer guide.
+PRs welcome! See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for developer guide.
 
 ## License
 

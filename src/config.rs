@@ -41,6 +41,12 @@ pub const SCENE_THRESHOLD: f32 = 0.3;
 pub const DEFAULT_LIMIT: usize = 10;
 pub const DEFAULT_MIN_SCORE: f32 = 0.05;
 pub const NEGATIVE_WEIGHT: f32 = 0.7;
+
+// === Cluster Defaults ===
+pub const DEFAULT_MIN_CLUSTER_SIZE: usize = 5;
+pub const DEFAULT_COHESION_THRESHOLD: f32 = 0.70;
+pub const DEFAULT_UMAP_NEIGHBORS: usize = 50;
+pub const DEFAULT_UMAP_COMPONENTS: usize = 64;
 pub const DEFAULT_CLUSTER_PREVIEW: usize = 5;
 
 pub fn set_model_dir(path: PathBuf) {
