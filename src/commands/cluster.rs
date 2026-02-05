@@ -43,7 +43,7 @@ pub fn run(
 	use_umap: bool,
 	umap_neighbors: usize,
 	umap_components: usize,
-	preview_count: usize,
+	preview_count: i32,
 	export: Option<&Path>,
 ) -> Result<()> {
 	let clusters_path = dir.join(SIDECAR_DIR).join(CLUSTERS_FILE);
@@ -207,7 +207,7 @@ fn load_cached_clusters(path: &Path) -> Option<ClusterDatabase> {
 fn print_clusters(
 	db: &ClusterDatabase,
 	hash_to_path: &HashMap<String, PathBuf>,
-	preview_count: usize,
+	preview_count: i32,
 ) {
 	ui::success(&format!(
 		"{} clusters, {} images, {} noise ({:.1}%)",
@@ -236,7 +236,13 @@ fn print_clusters(
 		}
 
 		// Show preview images/videos
-		for (i, hash) in cluster.image_hashes.iter().take(preview_count).enumerate() {
+		let count_to_show = if preview_count < 0 {
+			cluster.image_hashes.len()
+		} else {
+			preview_count as usize
+		};
+
+		for (i, hash) in cluster.image_hashes.iter().take(count_to_show).enumerate() {
 			if let Some(path) = hash_to_path.get(hash) {
 				eprintln!(
 					"  {} {}",
@@ -246,12 +252,12 @@ fn print_clusters(
 			}
 		}
 
-		if cluster.image_hashes.len() > preview_count {
+		if count_to_show < cluster.image_hashes.len() {
 			eprintln!(
 				"  {}",
 				format!(
 					"... and {} more",
-					cluster.image_hashes.len() - preview_count
+					cluster.image_hashes.len() - count_to_show
 				)
 				.dimmed()
 			);

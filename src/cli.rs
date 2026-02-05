@@ -141,7 +141,7 @@ pub enum Command {
 			default_value_t = crate::config::DEFAULT_CLUSTER_PREVIEW,
 			help = "Number of images to show per cluster"
 		)]
-		preview_count: usize,
+		preview_count: i32,
 
 		#[arg(long, help = "Export results as JSON to file")]
 		export: Option<PathBuf>,

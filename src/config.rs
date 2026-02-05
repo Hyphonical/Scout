@@ -47,7 +47,7 @@ pub const DEFAULT_MIN_CLUSTER_SIZE: usize = 5;
 pub const DEFAULT_COHESION_THRESHOLD: f32 = 0.70;
 pub const DEFAULT_UMAP_NEIGHBORS: usize = 50;
 pub const DEFAULT_UMAP_COMPONENTS: usize = 64;
-pub const DEFAULT_CLUSTER_PREVIEW: usize = 5;
+pub const DEFAULT_CLUSTER_PREVIEW: i32 = 5;
 
 pub fn set_model_dir(path: PathBuf) {
 	let _ = CUSTOM_MODEL_DIR.set(path);
