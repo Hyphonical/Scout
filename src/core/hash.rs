@@ -1,4 +1,7 @@
-//! Content-based file hashing
+//! # Content-Based Hashing
+//!
+//! Fast file identification using xxHash on the first 64KB.
+//! Used to detect file changes and avoid reprocessing.
 
 use std::fs::File;
 use std::io::Read;

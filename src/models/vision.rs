@@ -1,4 +1,7 @@
-//! Vision model (SigLIP2) for image embeddings
+//! # Vision Encoder
+//!
+//! SigLIP2 vision model for encoding images into embeddings.
+//! Preprocesses images to 512x512 and handles various pooling outputs.
 
 use anyhow::{Context, Result};
 use ort::session::Session;

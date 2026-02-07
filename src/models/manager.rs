@@ -1,4 +1,7 @@
-//! Lazy model loading coordinator
+//! # Model Manager
+//!
+//! Lazy-loads vision and text models on first use.
+//! Validates model paths and provides unified encoding interface.
 
 use anyhow::{Context, Result};
 use std::path::PathBuf;

@@ -1,4 +1,7 @@
-//! Image processing and encoding
+//! # Image Processing
+//!
+//! Load and encode images, with format detection fallback.
+//! Handles mismatched extensions and corrupted files gracefully.
 
 use anyhow::{Context, Result};
 use std::path::Path;

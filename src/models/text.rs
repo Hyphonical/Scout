@@ -1,4 +1,7 @@
-//! Text model (SigLIP2) for query embeddings
+//! # Text Encoder
+//!
+//! SigLIP2 text model for encoding search queries into embeddings.
+//! Handles tokenization and warns about query length limits.
 
 use anyhow::{Context, Result};
 use ort::session::Session;

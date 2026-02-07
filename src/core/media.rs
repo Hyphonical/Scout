@@ -1,4 +1,6 @@
-//! Media type detection
+//! # Media Type Detection
+//!
+//! Identify images and videos by file extension.
 
 use crate::config::{IMAGE_EXTENSIONS, VIDEO_EXTENSIONS};
 use std::path::Path;

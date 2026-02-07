@@ -1,4 +1,6 @@
-//! ONNX Runtime configuration
+//! # ONNX Runtime
+//!
+//! Session creation and execution provider selection.
 
 pub mod providers;
 

@@ -1,4 +1,6 @@
-//! ONNX model management
+//! # ONNX Model Management
+//!
+//! Lazy-loading model coordinator for vision and text encoders.
 
 pub mod manager;
 pub mod text;

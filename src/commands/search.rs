@@ -1,4 +1,7 @@
-//! Search command - find similar media
+//! # Search Command
+//!
+//! Semantic search using text queries, image references, or both.
+//! Supports negative prompts and exports results to JSON.
 
 use anyhow::{anyhow, Result};
 use colored::*;
@@ -233,11 +236,14 @@ pub fn run(
 	// Normal interactive output
 	ui::header("Results");
 
+	// Calculate min/max scores for gradient
+	let min_score = matches.iter().map(|m| m.score).min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)).unwrap_or(0.0);
+	let max_score = matches.iter().map(|m| m.score).max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)).unwrap_or(1.0);
+
 	for (i, m) in matches.iter().enumerate() {
 		let path = Path::new(&m.path);
 
 		let link = ui::log::path_link(path, 60);
-		let percentage = (m.score * 100.0).round() as u32;
 
 		let location_str = if let Some(ts) = m.timestamp {
 			format!(
@@ -248,13 +254,14 @@ pub fn run(
 			String::new()
 		};
 
+		let colored_percentage = ui::log::color_gradient(m.score * 100.0, min_score * 100.0, max_score * 100.0, false);
+
 		println!(
-			"{}. {}{} {} {}",
+			"{}. {}{} {}%",
 			format!("{:2}", i + 1).bright_blue().bold(),
 			link.bright_white(),
 			location_str.dimmed(),
-			format!("{}%", percentage).dimmed(),
-			if m.score > 0.8 { "🔥" } else { "" }
+			colored_percentage
 		);
 	}
 
@@ -266,7 +273,7 @@ pub fn run(
 	if !matches.is_empty() && matches[0].score < 0.10 {
 		ui::warn("Top result has low similarity (<10%)");
 		println!();
-		println!("  {} Try these techniques:", "💡".bright_blue().bold());
+		println!("  {} Try these techniques:", "ℹ".bright_blue().bold());
 		println!("     • Add more descriptive details");
 		println!("     • Use full sentences: \"Woman with red hair sitting on bench\"");
 		println!("     • Prefix with \"Image of...\" or \"Photo of...\"");

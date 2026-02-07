@@ -1,4 +1,7 @@
-//! Sidecar file format and I/O
+//! # Sidecar Files
+//!
+//! MessagePack-serialized embedding storage for images and videos.
+//! Version-tracked for compatibility during upgrades.
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};

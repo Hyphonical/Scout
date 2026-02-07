@@ -1,4 +1,7 @@
-//! Watch command - monitor directory for changes and auto-index
+//! # Watch Command
+//!
+//! Monitor directory for file changes and auto-index new media.
+//! Uses debounced filesystem events for efficient processing.
 
 use anyhow::{Context, Result};
 use notify_debouncer_mini::{new_debouncer, DebounceEventResult};

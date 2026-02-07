@@ -1,4 +1,7 @@
-//! Scan command - index images and videos
+//! # Scan Command
+//!
+//! Index media files by computing embeddings and storing sidecars.
+//! Supports both images and videos with scene detection.
 
 use anyhow::Result;
 use std::path::Path;

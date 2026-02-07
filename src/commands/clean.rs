@@ -1,4 +1,6 @@
-//! Clean command - remove orphaned sidecars
+//! # Clean Command
+//!
+//! Remove orphaned sidecar files whose source media no longer exists.
 
 use std::fs;
 use std::path::Path;

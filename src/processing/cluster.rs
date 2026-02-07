@@ -1,4 +1,7 @@
-//! HDBSCAN clustering for media embeddings
+//! # HDBSCAN Clustering
+//!
+//! Cluster embeddings using HDBSCAN with optional UMAP reduction.
+//! Computes cohesion scores and identifies representative files.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -7,7 +10,7 @@ use anyhow::{Context, Result};
 use hdbscan::{Hdbscan, HdbscanHyperParams};
 use rayon::prelude::*;
 
-use crate::core::{Cluster, ClusterDatabase, ClusterParams, Embedding};
+use crate::core::{compute_content_hash, Cluster, ClusterDatabase, ClusterParams, Embedding};
 use crate::storage::Sidecar;
 use crate::ui;
 
@@ -142,6 +145,10 @@ pub fn cluster_embeddings(
 		cluster.id = new_id;
 	}
 
+	// Compute content hash for cache invalidation
+	let all_hashes: Vec<String> = idx_to_hash.clone();
+	let content_hash = compute_content_hash(&all_hashes);
+
 	let db = ClusterDatabase {
 		version: env!("CARGO_PKG_VERSION").to_string(),
 		timestamp: chrono::Utc::now().to_rfc3339(),
@@ -149,6 +156,7 @@ pub fn cluster_embeddings(
 		clusters: filtered_clusters,
 		noise: noise_hashes,
 		total_images: sidecars.len(),
+		content_hash,
 	};
 
 	Ok(db)

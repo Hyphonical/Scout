@@ -1,4 +1,6 @@
-//! User interface (logging and output)
+//! # User Interface
+//!
+//! Colored terminal output with clickable file links.
 
 pub mod log;
 

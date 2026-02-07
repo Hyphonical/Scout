@@ -1,4 +1,7 @@
-//! Directory scanning for media files
+//! # Directory Scanning
+//!
+//! Discover and filter media files with parallel hashing.
+//! Respects .scoutignore and handles resolution/size limits.
 
 use std::collections::HashSet;
 use std::fs::{self, File};

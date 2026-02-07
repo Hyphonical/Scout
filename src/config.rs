@@ -1,4 +1,7 @@
-//! Application configuration and constants
+//! # Application Configuration
+//!
+//! Global constants, model paths, and file type definitions.
+//! Configurable via environment variables and CLI flags.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -48,6 +51,10 @@ pub const DEFAULT_COHESION_THRESHOLD: f32 = 0.70;
 pub const DEFAULT_UMAP_NEIGHBORS: usize = 50;
 pub const DEFAULT_UMAP_COMPONENTS: usize = 64;
 pub const DEFAULT_CLUSTER_PREVIEW: i32 = 5;
+
+// === Outliers Defaults ===
+pub const DEFAULT_OUTLIER_PREVIEW: usize = 10;
+pub const DEFAULT_OUTLIER_NEIGHBORS: usize = 5;
 
 pub fn set_model_dir(path: PathBuf) {
 	let _ = CUSTOM_MODEL_DIR.set(path);

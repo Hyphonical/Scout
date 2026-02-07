@@ -1,3 +1,8 @@
+//! # Scout Library
+//!
+//! AI-powered semantic media search using CLIP/SigLIP2 embeddings.
+//! Provides image and video indexing, semantic search, and clustering.
+
 pub mod cli;
 pub mod commands;
 pub mod config;

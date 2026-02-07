@@ -1,4 +1,7 @@
-//! UMAP dimensionality reduction for faster clustering
+//! # UMAP Dimensionality Reduction
+//!
+//! Reduce 1024D embeddings for faster clustering on large datasets.
+//! Uses brute-force KNN for accuracy in high dimensions.
 
 use anyhow::Result;
 use ndarray::Array2;

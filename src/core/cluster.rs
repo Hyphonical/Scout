@@ -1,6 +1,10 @@
-//! Cluster data structures for HDBSCAN clustering
+//! # Cluster Data Structures
+//!
+//! Types for HDBSCAN clustering results including clusters,
+//! parameters, and the complete database with cache validation.
 
 use serde::{Deserialize, Serialize};
+use xxhash_rust::xxh3::xxh3_64;
 
 /// Represents a single cluster of visually similar media
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,6 +34,9 @@ pub struct ClusterDatabase {
 	pub noise: Vec<String>,
 	/// Total images processed
 	pub total_images: usize,
+	/// Hash of all sidecar hashes for cache invalidation
+	#[serde(default)]
+	pub content_hash: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -50,4 +57,13 @@ impl ClusterDatabase {
 			(self.noise.len() as f32 / self.total_images as f32) * 100.0
 		}
 	}
+}
+
+/// Compute a hash representing the current state of all sidecars.
+/// This enables cache invalidation when files are added/removed.
+pub fn compute_content_hash(hashes: &[String]) -> String {
+	let mut sorted = hashes.to_vec();
+	sorted.sort();
+	let combined = sorted.join("");
+	format!("{:016x}", xxh3_64(combined.as_bytes()))
 }

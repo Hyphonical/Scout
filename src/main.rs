@@ -1,3 +1,8 @@
+//! # Scout CLI
+//!
+//! Entry point for the Scout command-line application.
+//! Parses arguments and dispatches to the appropriate command handler.
+
 mod cli;
 mod commands;
 mod config;
@@ -121,6 +126,12 @@ fn main() {
 			max_frames,
 			scene_threshold,
 		),
+		cli::Command::Outliers {
+			dir,
+			limit,
+			neighbors,
+			export,
+		} => commands::outliers::run(&dir, cli.recursive, limit, neighbors, export.as_deref()),
 	};
 
 	if let Err(e) = result {

@@ -1,4 +1,7 @@
-//! Command-line interface
+//! # Command-Line Interface
+//!
+//! Defines CLI structure using clap derive macros.
+//! All commands and global flags are declared here.
 
 use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
@@ -172,5 +175,20 @@ pub enum Command {
 
 		#[arg(long, help = "Scene detection threshold (0.0-1.0)")]
 		scene_threshold: Option<f32>,
+	},
+
+	/// Find statistically unusual media (outliers)
+	Outliers {
+		#[arg(short, long, default_value = ".")]
+		dir: PathBuf,
+
+		#[arg(short = 'n', long, default_value_t = crate::config::DEFAULT_OUTLIER_PREVIEW, help = "Number of outliers to show")]
+		limit: usize,
+
+		#[arg(short = 'k', long, default_value_t = crate::config::DEFAULT_OUTLIER_NEIGHBORS, help = "Number of neighbors for LOF")]
+		neighbors: usize,
+
+		#[arg(long, help = "Export results as JSON to file")]
+		export: Option<PathBuf>,
 	},
 }

@@ -1,4 +1,7 @@
-//! Execution provider selection
+//! # Execution Providers
+//!
+//! Auto-detect and configure hardware acceleration (CUDA, TensorRT, CoreML, XNNPACK).
+//! Falls back to CPU when no accelerators are available.
 
 use anyhow::{Context, Result};
 use ort::session::{builder::GraphOptimizationLevel, Session};

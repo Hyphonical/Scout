@@ -1,4 +1,7 @@
-//! Unified logging system
+//! # Logging System
+//!
+//! Colored terminal output with OSC 8 hyperlinks.
+//! Provides info, success, warning, error, and debug levels.
 
 use colored::*;
 use rand::Rng;
@@ -115,4 +118,42 @@ pub fn file_processed(path: &std::path::Path, duration_ms: u128) {
 		link.bright_white(),
 		format!("{}ms", duration_ms).dimmed()
 	));
+}
+
+/// Color a value based on a gradient from red (bad) to green (good).
+/// 
+/// # Arguments
+/// * `value` - The value to color
+/// * `min` - Minimum value (red)
+/// * `max` - Maximum value (green)
+/// * `is_dimmed` - If true, uses dark red/dark green for contrast
+pub fn color_gradient(value: f32, min: f32, max: f32, is_dimmed: bool) -> ColoredString {
+	let normalized = if max > min {
+		((value - min) / (max - min)).clamp(0.0, 1.0)
+	} else {
+		0.5 // If min == max, show neutral
+	};
+
+	let text = format!("{:.2}", value);
+
+	// Calculate RGB gradient from red to yellow to green
+	let (r, g, b) = if normalized < 0.5 {
+		// Red to yellow
+		let t = normalized * 2.0;
+		if is_dimmed {
+			(128, (t * 128.0) as u8, 0)
+		} else {
+			(255, (t * 255.0) as u8, 0)
+		}
+	} else {
+		// Yellow to green
+		let t = (normalized - 0.5) * 2.0;
+		if is_dimmed {
+			((128.0 * (1.0 - t)) as u8, 128, 0)
+		} else {
+			((255.0 * (1.0 - t)) as u8, 255, 0)
+		}
+	};
+
+	text.truecolor(r, g, b)
 }

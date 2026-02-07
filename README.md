@@ -15,6 +15,7 @@ Find images and videos by what's _in_ them, not what you named the file. No clou
   - [`scan` - Index Media](#scan---index-media)
   - [`search` - Find Media](#search---find-media)
   - [`cluster` - Group Media by Visual Similarity](#cluster---group-media-by-visual-similarity)
+  - [`outliers` - Find Unusual Media](#outliers---find-unusual-media)
   - [`clean` - Remove Orphaned Sidecars](#clean---remove-orphaned-sidecars)
   - [`watch` - Auto-Index New Files](#watch---auto-index-new-files)
   - [Global Options](#global-options)
@@ -300,6 +301,39 @@ Options:
 ```
 
 Deletes `.scout/` sidecar files for images that no longer exist.
+
+### `outliers` - Find unusual media
+
+```bash
+scout outliers [OPTIONS]
+
+Options:
+  -d, --dir <PATH>           Directory to analyze [default: .]
+  -n, --limit <N>            Number of outliers to show [default: 10]
+  -k, --neighbors <N>        Number of neighbors for LOF [default: 10]
+  --export <PATH>            Export results as JSON (use '-' for stdout)
+```
+
+Detect statistically unusual media using Local Outlier Factor (LOF) algorithm.
+
+**Examples:**
+
+```bash
+# Find top 10 outliers
+scout outliers -d ~/Photos
+
+# Find top 20 outliers with more neighbors
+scout outliers -d ~/Photos -n 20 -k 15
+
+# Export outliers as JSON
+scout outliers -d ~/Photos --export outliers.json
+```
+
+**How it works:**
+- Computes Local Outlier Factor (LOF) for each media file
+- LOF measures how isolated a point is from its neighbors
+- Higher LOF scores indicate more unusual/unique media
+- Useful for finding mislabeled files, unique content, or data quality issues
 
 ### `watch` - Auto-index new files
 

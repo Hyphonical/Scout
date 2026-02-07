@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Scout
+Comment=AI-powered semantic media search
+Exec=scout
+Icon=scout
+Type=Application
+Categories=Graphics;Utility;
+Terminal=true

@@ -1,4 +1,7 @@
-//! Cluster command - group media by visual similarity
+//! # Cluster Command
+//!
+//! Group media by visual similarity using HDBSCAN.
+//! Features cohesion filtering, UMAP reduction, and cache validation.
 
 use std::collections::HashMap;
 use std::fs;
@@ -10,7 +13,7 @@ use colored::*;
 use serde::{Deserialize, Serialize};
 
 use crate::config::{CLUSTERS_FILE, SIDECAR_DIR};
-use crate::core::{ClusterDatabase, ClusterParams};
+use crate::core::{compute_content_hash, ClusterDatabase, ClusterParams};
 use crate::processing::cluster::cluster_embeddings;
 use crate::storage::index;
 use crate::ui;
@@ -59,8 +62,8 @@ pub fn run(
 	if min_cluster_size != crate::config::DEFAULT_MIN_CLUSTER_SIZE {
 		param_strs.push(format!("min_cluster_size={}", min_cluster_size));
 	}
-	if min_samples.is_some() {
-		param_strs.push(format!("min_samples={}", min_samples.unwrap()));
+	if let Some(samples) = min_samples {
+		param_strs.push(format!("min_samples={}", samples));
 	}
 	if (cohesion_threshold - crate::config::DEFAULT_COHESION_THRESHOLD).abs() > 0.001 {
 		param_strs.push(format!("threshold={:.2}", cohesion_threshold));
@@ -94,30 +97,45 @@ pub fn run(
 			if cached_db.params != params {
 				ui::debug("Cached parameters don't match, reclustering...");
 			} else {
-			ui::debug(&format!(
-				"Found cached clusters: {} clusters, {} images",
-				cached_db.clusters.len(),
-				cached_db.total_images
-			));
+				// Load sidecars to validate cache and build hash-to-path lookup
+				ui::debug("Loading sidecars to validate cache...");
+				let (sidecars, hash_to_path) = index::load_all_sidecars(dir, recursive);
+				
+				// Compute current content hash
+				let current_hashes: Vec<String> = sidecars.iter()
+					.map(|(_, s)| s.hash().to_string())
+					.collect();
+				let current_content_hash = compute_content_hash(&current_hashes);
+				
+				// Check if content has changed
+				if !cached_db.content_hash.is_empty() && cached_db.content_hash != current_content_hash {
+					ui::debug(&format!(
+						"Content changed (cached: {}, current: {}), reclustering...",
+						&cached_db.content_hash[..8.min(cached_db.content_hash.len())],
+						&current_content_hash[..8]
+					));
+				} else {
+					ui::debug(&format!(
+						"Found cached clusters: {} clusters, {} images",
+						cached_db.clusters.len(),
+						cached_db.total_images
+					));
 
-			// Load sidecars to build hash-to-path lookup
-			ui::debug("Loading sidecars for cached cluster display...");
-			let (_, hash_to_path) = index::load_all_sidecars(dir, recursive);
+					// Handle --export flag
+					if let Some(export_path) = export {
+						return export_clusters(&cached_db, &hash_to_path, export_path);
+					}
 
-			// Handle --export flag
-			if let Some(export_path) = export {
-				return export_clusters(&cached_db, &hash_to_path, export_path);
-			}
+					ui::success("Using cached clusters");
+					print_clusters(&cached_db, &hash_to_path, preview_count);
+					ui::debug(&format!(
+						"{}",
+						format!("Clustered at: {}", cached_db.timestamp).dimmed()
+					));
 
-			ui::success("Using cached clusters");
-			print_clusters(&cached_db, &hash_to_path, preview_count);
-			ui::debug(&format!(
-				"{}",
-				format!("Clustered at: {}", cached_db.timestamp).dimmed()
-			));
-
-			ui::debug(&format!("{}", "Run with --force to recluster".dimmed()));
-			return Ok(());
+					ui::debug(&format!("{}", "Run with --force to recluster".dimmed()));
+					return Ok(());
+				}
 			}
 		}
 	} else {
@@ -217,13 +235,19 @@ fn print_clusters(
 		db.noise_percent()
 	));
 
+	// Calculate min/max cohesion for gradient
+	let min_cohesion = db.clusters.iter().map(|c| c.cohesion * 100.0).min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)).unwrap_or(50.0);
+	let max_cohesion = db.clusters.iter().map(|c| c.cohesion * 100.0).max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)).unwrap_or(100.0);
+
 	for cluster in &db.clusters {
+		let colored_cohesion = ui::log::color_gradient(cluster.cohesion * 100.0, min_cohesion, max_cohesion, false);
+		
 		eprintln!(
-			"\n{} {} ({} images, {:.1}% cohesion)",
+			"\n{} {} ({} images, {}% cohesion)",
 			"Cluster".bright_white(),
 			cluster.id.to_string().bright_cyan(),
 			cluster.image_hashes.len(),
-			cluster.cohesion * 100.0
+			colored_cohesion
 		);
 
 		// Show representative

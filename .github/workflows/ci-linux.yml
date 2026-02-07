@@ -34,8 +34,35 @@ jobs:
             target/
           key: linux-x86_64-cargo-${{ hashFiles('**/Cargo.lock') }}
 
+      - name: 🧪 Install Dependencies
+        run: sudo apt-get update && sudo apt-get install -y imagemagick
+
       - name: 🚧 Build Release
         run: cargo build --release --target x86_64-unknown-linux-gnu
+
+      - name: 📦 Install cargo-deb
+        run: cargo install cargo-deb --locked
+
+      - name: 📦 Build .deb Package
+        run: cargo deb --target x86_64-unknown-linux-gnu --no-build
+
+      - name: 📦 Build AppImage
+        run: |
+          # Download linuxdeploy and AppImage plugin
+          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/1-alpha-20250213-2/linuxdeploy-x86_64.AppImage
+          chmod +x linuxdeploy-x86_64.AppImage
+          
+          # Create AppDir structure
+          mkdir -p AppDir/usr/bin AppDir/usr/share/applications AppDir/usr/share/icons/hicolor/256x256/apps
+          cp target/x86_64-unknown-linux-gnu/release/scout AppDir/usr/bin/
+          cp assets/scout.desktop AppDir/usr/share/applications/
+          
+          # Use placeholder icon (required for AppImage)
+          convert -size 256x256 xc:'#1e90ff' -gravity center -fill white -pointsize 72 -annotate 0 'S' AppDir/usr/share/icons/hicolor/256x256/apps/scout.png
+          
+          # Build AppImage
+          ARCH=x86_64 ./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage
+          mv Scout*.AppImage scout-linux-x64.AppImage
 
       - name: 📦 Package
         run: |
@@ -45,10 +72,26 @@ jobs:
           cd dist
           tar czf ../scout-linux-x64.tar.gz *
 
-      - name: 📤 Upload Artifact
+      - name: 📤 Upload Tarball
         uses: actions/upload-artifact@v4
         with:
           name: scout-linux-x64.tar.gz
           path: scout-linux-x64.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: 📤 Upload .deb Package
+        uses: actions/upload-artifact@v4
+        with:
+          name: scout-linux-x64.deb
+          path: target/x86_64-unknown-linux-gnu/debian/*.deb
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: 📤 Upload AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: scout-linux-x64.AppImage
+          path: scout-linux-x64.AppImage
           if-no-files-found: error
           retention-days: 7

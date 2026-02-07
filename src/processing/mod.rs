@@ -1,4 +1,6 @@
-//! Media file processing
+//! # Media Processing
+//!
+//! Image/video processing, directory scanning, clustering, and UMAP.
 
 pub mod cluster;
 pub mod image;

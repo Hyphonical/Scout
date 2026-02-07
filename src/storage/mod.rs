@@ -1,4 +1,7 @@
-//! Embedding storage system
+//! # Embedding Storage
+//!
+//! Sidecar file I/O for persisting embeddings alongside media.
+//! Uses MessagePack for compact binary storage.
 
 pub mod index;
 pub mod sidecar;

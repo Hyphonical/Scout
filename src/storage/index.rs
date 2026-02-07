@@ -1,4 +1,7 @@
-//! Sidecar discovery and scanning
+//! # Sidecar Index
+//!
+//! Discover sidecars and build hash-to-path lookup tables.
+//! Enables efficient embedding retrieval for search and clustering.
 
 use std::collections::HashMap;
 use std::fs;

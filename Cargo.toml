@@ -67,3 +67,16 @@ opt-level = 2
 lto = "thin"
 codegen-units = 16
 strip = true
+
+[package.metadata.deb]
+maintainer = "Hyphonical"
+copyright = "2026, Hyphonical"
+extended-description = "Scout is an AI-powered semantic media search tool that embeds images and videos locally using ONNX models, enabling natural language queries and visual similarity clustering."
+depends = "$auto"
+section = "graphics"
+priority = "optional"
+assets = [
+    ["target/release/scout", "usr/bin/", "755"],
+    ["README.md", "usr/share/doc/scout/", "644"],
+    ["LICENSE", "usr/share/doc/scout/", "644"],
+]

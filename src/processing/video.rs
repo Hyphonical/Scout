@@ -1,4 +1,7 @@
-//! Video frame extraction using FFmpeg
+//! # Video Processing
+//!
+//! Extract representative frames using FFmpeg scene detection.
+//! Encodes each frame for temporal video search.
 
 use anyhow::{Context, Result};
 use image::RgbImage;

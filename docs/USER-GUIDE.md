@@ -8,6 +8,7 @@ Complete guide to using Scout's features.
   - [scan](#scan---index-files)
   - [search](#search---find-similar-files)
   - [cluster](#cluster---group-by-similarity)
+  - [outliers](#outliers---find-unusual-media)
   - [clean](#clean---remove-orphaned-sidecars)
   - [watch](#watch---auto-index-new-files)
 - [Search Techniques](#search-techniques)
@@ -265,6 +266,57 @@ Noise (1180 files)
 - Cached clustering: Instant reload from disk
 - Clear cache with `--force` to force reclustering
 - No central database: Uses sidecars you already have
+
+### `outliers` - Find Unusual Media
+
+Detect statistically unusual media using Local Outlier Factor (LOF) algorithm.
+
+```bash
+scout outliers [OPTIONS]
+```
+
+**Options:**
+- `-d, --dir <DIR>` - Directory to analyze (default: current)
+- `-n, --limit <N>` - Number of outliers to show (default: 10)
+- `-k, --neighbors <N>` - Number of neighbors for LOF (default: 10)
+- `--export <PATH>` - Export results as JSON to file (use '-' for stdout)
+
+**Examples:**
+
+```bash
+# Find top 10 outliers
+scout outliers -d ~/Photos
+
+# Find more outliers with higher k
+scout outliers -d ~/Photos -n 20 -k 15
+
+# Export outliers as JSON
+scout outliers --export outliers.json
+
+# Process outliers with jq
+scout outliers --export - | jq '.outliers[] | select(.score > 2.0)'
+
+# Move high-scoring outliers to review folder (Linux/macOS)
+scout outliers --export - | jq -r '.outliers[] | select(.score > 1.5) | .path' | xargs -I {} mv {} ./review/
+```
+
+**How it works:**
+1. Computes Local Outlier Factor (LOF) for each media file
+2. LOF measures how isolated a point is relative to its neighbors
+3. Points with high LOF scores are more unusual/isolated in the embedding space
+4. LOF > 1.0 generally indicates an outlier
+
+**Understanding LOF scores:**
+- **LOF ≈ 1.0**: Normal point, similar density to neighbors
+- **LOF 1.0-1.5**: Slightly unusual
+- **LOF 1.5-2.0**: Notably unusual (📌 indicator)
+- **LOF > 2.0**: Highly unusual (⚠️ indicator)
+
+**Use cases:**
+- **Data quality**: Find mislabeled or corrupted files
+- **Unique content**: Discover one-of-a-kind media in your collection
+- **Cleanup**: Identify files that don't belong in a folder
+- **Curation**: Find standout images for portfolios or highlights
 
 ### `clean` - Remove Orphaned Sidecars
 

@@ -1,4 +1,7 @@
-//! Normalized embedding vectors for semantic similarity
+//! # Embedding Vectors
+//!
+//! Normalized vector representations for semantic similarity.
+//! Supports cosine similarity, blending, and distance metrics.
 
 #[derive(Debug, Clone)]
 pub struct Embedding(pub Vec<f32>);
