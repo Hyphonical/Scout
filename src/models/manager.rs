@@ -15,6 +15,8 @@ pub struct Models {
 	vision_path: PathBuf,
 	text_path: PathBuf,
 	tokenizer_path: PathBuf,
+	/// If true, suppress UI output (for library use)
+	pub(crate) quiet: bool,
 }
 
 impl Models {
@@ -32,7 +34,41 @@ impl Models {
 			config::TOKENIZER
 		))?;
 
-		// Verify files actually exist
+		Self::validate_and_build(vision_path, text_path, tokenizer_path, false)
+	}
+
+	/// Create Models with explicit file paths (for library use).
+	///
+	/// - `vision_path`: path to the vision ONNX model
+	/// - `text_path`: path to the text ONNX model
+	/// - `tokenizer_path`: path to the tokenizer JSON
+	pub fn with_paths(
+		vision_path: PathBuf,
+		text_path: PathBuf,
+		tokenizer_path: PathBuf,
+	) -> Result<Self> {
+		Self::validate_and_build(vision_path, text_path, tokenizer_path, false)
+	}
+
+	/// Create Models from a directory containing all three model files.
+	///
+	/// Expects the directory to contain:
+	/// - `vision_model_q4f16.onnx`
+	/// - `text_model_q4f16.onnx`
+	/// - `tokenizer.json`
+	pub fn from_dir(model_dir: PathBuf) -> Result<Self> {
+		let vision_path = model_dir.join(config::VISION_MODEL);
+		let text_path = model_dir.join(config::TEXT_MODEL);
+		let tokenizer_path = model_dir.join(config::TOKENIZER);
+		Self::validate_and_build(vision_path, text_path, tokenizer_path, false)
+	}
+
+	fn validate_and_build(
+		vision_path: PathBuf,
+		text_path: PathBuf,
+		tokenizer_path: PathBuf,
+		quiet: bool,
+	) -> Result<Self> {
 		if !vision_path.exists() {
 			anyhow::bail!(
 				"Vision model file does not exist: {}",
@@ -55,17 +91,22 @@ impl Models {
 			vision_path,
 			text_path,
 			tokenizer_path,
+			quiet,
 		})
 	}
 
 	pub fn encode_image(&mut self, image: &image::DynamicImage) -> Result<Embedding> {
 		if self.vision.is_none() {
-			crate::ui::debug(&format!(
-				"Loading vision model: {}",
-				self.vision_path.display()
-			));
+			if !self.quiet {
+				crate::ui::debug(&format!(
+					"Loading vision model: {}",
+					self.vision_path.display()
+				));
+			}
 			self.vision = Some(super::vision::VisionModel::load(&self.vision_path)?);
-			crate::ui::success("Vision model loaded");
+			if !self.quiet {
+				crate::ui::success("Vision model loaded");
+			}
 		}
 
 		self.vision.as_mut().unwrap().encode(image)
@@ -73,12 +114,16 @@ impl Models {
 
 	pub fn encode_text(&mut self, text: &str) -> Result<Embedding> {
 		if self.text.is_none() {
-			crate::ui::debug(&format!("Loading text model: {}", self.text_path.display()));
+			if !self.quiet {
+				crate::ui::debug(&format!("Loading text model: {}", self.text_path.display()));
+			}
 			self.text = Some(super::text::TextModel::load(
 				&self.text_path,
 				&self.tokenizer_path,
 			)?);
-			crate::ui::success("Text model loaded");
+			if !self.quiet {
+				crate::ui::success("Text model loaded");
+			}
 		}
 
 		self.text.as_mut().unwrap().encode(text)

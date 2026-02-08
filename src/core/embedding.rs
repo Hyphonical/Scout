@@ -3,7 +3,9 @@
 //! Normalized vector representations for semantic similarity.
 //! Supports cosine similarity, blending, and distance metrics.
 
-#[derive(Debug, Clone)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Embedding(pub Vec<f32>);
 
 impl Embedding {
